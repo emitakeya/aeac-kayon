@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import type { CurrentUser } from '@/lib/types';
 import { LogoutButton } from './logout-button';
@@ -86,7 +87,11 @@ export default async function DashboardPage() {
         </h3>
         <div className="space-y-2">
           {me.can_view_tech_pages && (
-            <PageLink title="Rekap Komisi Teknisi" subtitle="Sedang dipindahkan dari WordPress" disabled />
+            <PageLink
+              href="/komisi-teknisi"
+              title="Rekap Komisi Teknisi"
+              subtitle="Lihat komisi per teknisi & per kuartal"
+            />
           )}
           {me.can_view_finance && (
             <PageLink title="Invoice Admin" subtitle="Belum dibangun" disabled />
@@ -136,16 +141,18 @@ function RoleBadge({ role }: { role: CurrentUser['role'] }) {
 }
 
 function PageLink({
+  href,
   title,
   subtitle,
   disabled,
 }: {
+  href?: string;
   title: string;
   subtitle: string;
   disabled?: boolean;
 }) {
   const base = 'block bg-white border border-neutral-200 rounded-xl px-4 py-3 transition';
-  if (disabled) {
+  if (disabled || !href) {
     return (
       <div className={`${base} opacity-60 cursor-not-allowed`}>
         <div className="text-sm font-medium text-neutral-700">{title}</div>
@@ -153,7 +160,12 @@ function PageLink({
       </div>
     );
   }
-  return null;
+  return (
+    <Link href={href} className={`${base} hover:bg-amber-50 hover:border-amber-200`}>
+      <div className="text-sm font-medium text-neutral-900">{title}</div>
+      <div className="text-[11px] text-neutral-500 mt-0.5">{subtitle}</div>
+    </Link>
+  );
 }
 
 function Cap({ label, v }: { label: string; v: boolean }) {
