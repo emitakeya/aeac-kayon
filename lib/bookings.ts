@@ -159,3 +159,15 @@ export function waLink(phone: string | null | undefined): string | null {
   if (!digits) return null;
   return `https://wa.me/${digits}`;
 }
+
+// ──────────────────────────────────────────
+// Phone-call link helper: tel: URI, strip non-digits.
+// Some Indonesian numbers come in with leading "0" (local) or "+62" (intl).
+// We keep the digits as-is (no normalization) so the dialer shows what's stored.
+// ──────────────────────────────────────────
+export function telLink(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return null;
+  return `tel:${digits}`;
+}

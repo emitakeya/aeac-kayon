@@ -132,8 +132,21 @@ function BookingCard({ b, isPast }: { b: BookingRow; isPast: boolean }) {
         <div className="a-card-row">
           <span className="a-card-row-key">HP / WA</span>
           <span className="a-card-row-val">
-            {phoneWa ? (
-              <a href={phoneWa} target="_blank" rel="noopener noreferrer">{phone}</a>
+            {phone ? (
+              <span className="a-phone-block">
+                <span className="a-phone-num">{phone}</span>
+                {phoneWa && (
+                  <a
+                    className="a-wa-pill"
+                    href={phoneWa}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Buka WhatsApp ${phone}`}
+                  >
+                    💬 WA
+                  </a>
+                )}
+              </span>
             ) : "—"}
           </span>
         </div>
@@ -173,9 +186,20 @@ function BookingCard({ b, isPast }: { b: BookingRow; isPast: boolean }) {
               <div className="a-card-row">
                 <span className="a-card-row-key">HP / WA</span>
                 <span className="a-card-row-val">
-                  {waitPhoneWa ? (
-                    <a href={waitPhoneWa} target="_blank" rel="noopener noreferrer">{waitPhone}</a>
-                  ) : waitPhone}
+                  <span className="a-phone-block">
+                    <span className="a-phone-num">{waitPhone}</span>
+                    {waitPhoneWa && (
+                      <a
+                        className="a-wa-pill"
+                        href={waitPhoneWa}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Buka WhatsApp ${waitPhone}`}
+                      >
+                        💬 WA
+                      </a>
+                    )}
+                  </span>
                 </span>
               </div>
             )}

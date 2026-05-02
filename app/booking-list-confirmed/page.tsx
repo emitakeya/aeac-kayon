@@ -161,12 +161,35 @@ function PageStyles() {
       .aw .a-card-rows { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
       .aw .a-card-section { font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: 0.04em; margin-top: 4px; }
       .aw .a-card-section:first-child { margin-top: 0; }
-      .aw .a-card-row { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+      .aw .a-card-row { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; align-items: center; }
       .aw .a-card-row-key { color: var(--muted); flex-shrink: 0; }
       .aw .a-card-row-val { text-align: right; word-break: break-word; }
       .aw .a-card-row-val a { color: #1e3a5f; text-decoration: none; }
       .aw .a-card-row-val a:hover { text-decoration: underline; }
       .aw .a-services-list { font-size: 12px; line-height: 1.6; }
+
+      /* Phone block — number + WA pill side-by-side */
+      .aw .a-phone-block { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+      .aw .a-phone-num { color: var(--text); font-weight: 500; }
+      .aw .a-wa-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 11px;
+        background: #25d366;
+        color: #fff !important;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        text-decoration: none !important;
+        white-space: nowrap;
+        line-height: 1.2;
+        min-height: 26px;
+        transition: background 0.15s, transform 0.1s;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .aw .a-wa-pill:hover { background: #1ebe5a; text-decoration: none !important; }
+      .aw .a-wa-pill:active { transform: scale(0.96); }
 
       .aw .a-notes { margin-top: 10px; padding: 8px 10px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 12px; color: #78350f; line-height: 1.5; }
       .aw .a-notes-label { font-size: 10px; font-weight: 600; color: #92400e; letter-spacing: 0.04em; margin-bottom: 3px; }
