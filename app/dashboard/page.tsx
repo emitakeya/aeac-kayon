@@ -86,6 +86,13 @@ export default async function DashboardPage() {
           Halaman Tersedia
         </h3>
         <div className="space-y-2">
+          {me.can_view_tech_pages && (
+            <PageLink
+              href="/komisi-teknisi"
+              title="Rekap Komisi Teknisi"
+              subtitle="Lihat komisi per teknisi & per kuartal"
+            />
+          )}
           {me.can_view_mm && (
             <PageLink
               href="/booking-list-confirmed"
@@ -98,9 +105,6 @@ export default async function DashboardPage() {
           )}
           {me.can_admin && (
             <PageLink title="Booking List & Cancel" subtitle="Belum dibangun" disabled />
-          )}
-          {me.can_view_mm && (
-            <PageLink title="Booking List (Confirmed)" subtitle="Belum dibangun" disabled />
           )}
           {me.role === 'technician' && (
             <PageLink title="Laporan Teknisi" subtitle="Belum dibangun" disabled />
