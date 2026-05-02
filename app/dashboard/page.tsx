@@ -101,7 +101,11 @@ export default async function DashboardPage() {
             />
           )}
           {me.can_view_finance && (
-            <PageLink title="Invoice Admin" subtitle="Belum dibangun" disabled />
+            <PageLink
+              href="/invoice-admin"
+              title="Invoice Admin"
+              subtitle="Kelola dan kirim invoice ke customer"
+            />
           )}
           {me.can_admin && (
             <PageLink title="Booking List & Cancel" subtitle="Belum dibangun" disabled />
