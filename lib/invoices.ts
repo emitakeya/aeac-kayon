@@ -170,3 +170,117 @@ export function calcSubtotal(items: LineItem[]): number {
 export function calcTotal(items: LineItem[], discount: number): number {
   return Math.max(0, calcSubtotal(items) - (Number(discount) || 0));
 }
+
+// ──────────────────────────────────────────
+// Month grouping (Indonesian).
+// monthKey is "YYYY-MM" (sortable, lexicographically descending = newest first).
+// ──────────────────────────────────────────
+
+const BULAN_ID_FULL = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+];
+
+// Returns "YYYY-MM" from any ISO-ish timestamp / date string.
+// Uses Asia/Jakarta so a 23:30 UTC paid_date doesn't roll into the next month.
+export function monthKeyFromIso(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const ymd = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+  return ymd.slice(0, 7); // "YYYY-MM"
+}
+
+// "YYYY-MM" → "Mei 2026"
+export function monthLabel(monthKey: string): string {
+  const m = monthKey.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return monthKey;
+  const monthIdx = Number(m[2]) - 1;
+  return `${BULAN_ID_FULL[monthIdx] ?? m[2]} ${m[1]}`;
+}
+
+// Current month in Asia/Jakarta as "YYYY-MM".
+export function currentMonthKey(): string {
+  return todayInJakarta().slice(0, 7);
+}
+
+// ──────────────────────────────────────────
+// Group invoices by created_at month, newest month first.
+// Includes a paid/unpaid count for header pills.
+// ──────────────────────────────────────────
+export type InvoiceMonthGroup = {
+  monthKey: string; // "YYYY-MM"
+  invoices: InvoiceRow[];
+  paidCount: number;
+  unpaidCount: number;
+};
+
+export function groupInvoicesByMonth(invoices: InvoiceRow[]): InvoiceMonthGroup[] {
+  const map = new Map<string, InvoiceRow[]>();
+  for (const inv of invoices) {
+    const key = monthKeyFromIso(inv.created_at) ?? "unknown";
+    const arr = map.get(key);
+    if (arr) arr.push(inv);
+    else map.set(key, [inv]);
+  }
+  // sort keys: known months desc by string ("2026-05" > "2026-04"), unknown last
+  const keys = Array.from(map.keys()).sort((a, b) => {
+    if (a === "unknown") return 1;
+    if (b === "unknown") return -1;
+    return a < b ? 1 : a > b ? -1 : 0; // desc
+  });
+  return keys.map((monthKey) => {
+    const list = map.get(monthKey)!;
+    let paid = 0;
+    let unpaid = 0;
+    for (const i of list) {
+      if (i.status === "paid") paid++;
+      else unpaid++;
+    }
+    return {
+      monthKey,
+      invoices: list,
+      paidCount: paid,
+      unpaidCount: unpaid,
+    };
+  });
+}
+
+// ──────────────────────────────────────────
+// Group completed-but-unpaid orders by service date month.
+// Service date is encoded in order_id: aeac-YYYYMMDD-NNN-...
+// ──────────────────────────────────────────
+export type OrderMonthGroup = {
+  monthKey: string;
+  orders: CompletedOrder[];
+};
+
+function monthKeyFromOrderId(orderId: string): string | null {
+  const m = orderId.match(/^aeac-(\d{4})(\d{2})\d{2}-/);
+  if (!m) return null;
+  return `${m[1]}-${m[2]}`;
+}
+
+export function groupOrdersByMonth(orders: CompletedOrder[]): OrderMonthGroup[] {
+  const map = new Map<string, CompletedOrder[]>();
+  for (const o of orders) {
+    const key = monthKeyFromOrderId(o.order_id) ?? "unknown";
+    const arr = map.get(key);
+    if (arr) arr.push(o);
+    else map.set(key, [o]);
+  }
+  const keys = Array.from(map.keys()).sort((a, b) => {
+    if (a === "unknown") return 1;
+    if (b === "unknown") return -1;
+    return a < b ? 1 : a > b ? -1 : 0;
+  });
+  return keys.map((monthKey) => ({
+    monthKey,
+    orders: map.get(monthKey)!,
+  }));
+}

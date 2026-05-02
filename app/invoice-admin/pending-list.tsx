@@ -5,8 +5,11 @@ import {
   type CompletedOrder,
   type InvoiceRow,
   filterPendingInvoice,
+  groupOrdersByMonth,
+  currentMonthKey,
   toProper,
 } from "@/lib/invoices";
+import MonthAccordion, { type MonthAccordionItem } from "./month-accordion";
 
 export default function PendingList({
   orders,
@@ -31,13 +34,28 @@ export default function PendingList({
     );
   }
 
-  return (
-    <section className="space-y-2.5">
-      {pending.map((o) => (
-        <PendingCard key={o.order_id} order={o} />
-      ))}
-    </section>
-  );
+  const groups = groupOrdersByMonth(pending);
+
+  const cur = currentMonthKey();
+  const defaultOpenKey =
+    groups.find((g) => g.monthKey === cur)?.monthKey
+    ?? groups[0]?.monthKey
+    ?? null;
+
+  const items: MonthAccordionItem[] = groups.map((g) => ({
+    monthKey: g.monthKey,
+    count: g.orders.length,
+    badges: [{ label: `${g.orders.length} order`, tone: "muted" }],
+    children: (
+      <>
+        {g.orders.map((o) => (
+          <PendingCard key={o.order_id} order={o} />
+        ))}
+      </>
+    ),
+  }));
+
+  return <MonthAccordion items={items} defaultOpenKey={defaultOpenKey} />;
 }
 
 function PendingCard({ order }: { order: CompletedOrder }) {
@@ -78,7 +96,9 @@ function PendingCard({ order }: { order: CompletedOrder }) {
 
         <button
           type="button"
-          onClick={() => alert(`(Coming next) Buat invoice untuk ${order.order_id}`)}
+          onClick={() =>
+            alert(`(Coming next) Buat invoice untuk ${order.order_id}`)
+          }
           className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-2 active:scale-[0.98] transition"
         >
           + Invoice

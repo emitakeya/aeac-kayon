@@ -2,7 +2,13 @@
 "use client";
 
 import { useState } from "react";
-import { type InvoiceRow, fmtRp } from "@/lib/invoices";
+import {
+  type InvoiceRow,
+  fmtRp,
+  groupInvoicesByMonth,
+  currentMonthKey,
+} from "@/lib/invoices";
+import MonthAccordion, { type MonthAccordionItem } from "./month-accordion";
 
 export default function InvoicedList({
   invoices,
@@ -25,13 +31,38 @@ export default function InvoicedList({
     );
   }
 
-  return (
-    <section className="space-y-2.5">
-      {invoices.map((inv) => (
-        <InvoicedCard key={inv.id} invoice={inv} onChange={onChange} />
-      ))}
-    </section>
-  );
+  const groups = groupInvoicesByMonth(invoices);
+
+  // Default-open: the current Jakarta month if it appears, else newest.
+  const cur = currentMonthKey();
+  const defaultOpenKey =
+    groups.find((g) => g.monthKey === cur)?.monthKey
+    ?? groups[0]?.monthKey
+    ?? null;
+
+  const items: MonthAccordionItem[] = groups.map((g) => {
+    const badges: MonthAccordionItem["badges"] = [];
+    if (g.paidCount > 0) {
+      badges.push({ label: `✓ ${g.paidCount}`, tone: "paid" });
+    }
+    if (g.unpaidCount > 0) {
+      badges.push({ label: `⏳ ${g.unpaidCount}`, tone: "unpaid" });
+    }
+    return {
+      monthKey: g.monthKey,
+      count: g.invoices.length,
+      badges,
+      children: (
+        <>
+          {g.invoices.map((inv) => (
+            <InvoicedCard key={inv.id} invoice={inv} onChange={onChange} />
+          ))}
+        </>
+      ),
+    };
+  });
+
+  return <MonthAccordion items={items} defaultOpenKey={defaultOpenKey} />;
 }
 
 // ──────────────────────────────────────────
