@@ -2,9 +2,13 @@
 "use client";
 
 import { useState } from "react";
-import type { InvoiceAdminData } from "@/lib/invoices";
+import type {
+  InvoiceAdminData,
+  OrderForInvoicing,
+} from "@/lib/invoices";
 import PendingList from "./pending-list";
 import InvoicedList from "./invoiced-list";
+import InvoiceEditor from "./invoice-editor";
 
 type Tab = "pending" | "invoiced";
 
@@ -17,11 +21,15 @@ export default function InvoiceAdminClient({
   const [tab, setTab] = useState<Tab>("pending");
   const [refreshing, setRefreshing] = useState(false);
 
+  // The editor view replaces the list view when an order is selected.
+  const [selected, setSelected] = useState<OrderForInvoicing | null>(null);
+  const [loadingOrder, setLoadingOrder] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // ──────────────────────────────────────────
   async function refreshAll() {
     setRefreshing(true);
     try {
-      // Re-fetch via the RPC. We hit a small Next.js route helper for this
-      // rather than calling supabase directly, so the auth flow stays uniform.
       const res = await fetch("/api/invoice-admin/refresh", {
         method: "POST",
         cache: "no-store",
@@ -31,14 +39,62 @@ export default function InvoiceAdminClient({
       setData(fresh);
     } catch (e) {
       console.error("refreshAll failed:", e);
-      alert(
-        "Gagal memuat ulang data. Silakan refresh halaman."
-      );
+      alert("Gagal memuat ulang data. Silakan refresh halaman.");
     } finally {
       setRefreshing(false);
     }
   }
 
+  // ──────────────────────────────────────────
+  async function handleSelectOrder(orderId: string) {
+    setLoadingOrder(orderId);
+    setLoadError(null);
+    try {
+      const res = await fetch("/api/invoice-admin/load-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: orderId }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || `HTTP ${res.status}`);
+      }
+      setSelected(json.data as OrderForInvoicing);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setLoadError(msg);
+      alert(`Gagal memuat order: ${msg}`);
+    } finally {
+      setLoadingOrder(null);
+    }
+  }
+
+  function closeEditor() {
+    setSelected(null);
+    setLoadError(null);
+  }
+
+  async function handleSent() {
+    setSelected(null);
+    setTab("invoiced");
+    await refreshAll();
+  }
+
+  // ──────────────────────────────────────────
+  // Editor view replaces the entire list UI when an order is loaded.
+  if (selected) {
+    return (
+      <InvoiceEditor
+        loaded={selected}
+        services={data.services}
+        technicians={data.technicians}
+        onCancel={closeEditor}
+        onSent={handleSent}
+      />
+    );
+  }
+
+  // ──────────────────────────────────────────
   const pendingCount = data.completed_orders.filter(
     (o) => !data.invoices.some((i) => i.order_id === o.order_id)
   ).length;
@@ -97,13 +153,18 @@ export default function InvoiceAdminClient({
         <PendingList
           orders={data.completed_orders}
           invoices={data.invoices}
+          onSelectOrder={handleSelectOrder}
+          loadingOrderId={loadingOrder}
         />
       ) : (
-        <InvoicedList
-          invoices={data.invoices}
-          onChange={refreshAll}
-        />
+        <InvoicedList invoices={data.invoices} onChange={refreshAll} />
       )}
+
+      {loadError ? (
+        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          ⚠ {loadError}
+        </div>
+      ) : null}
     </main>
   );
 }

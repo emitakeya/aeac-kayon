@@ -14,9 +14,13 @@ import MonthAccordion, { type MonthAccordionItem } from "./month-accordion";
 export default function PendingList({
   orders,
   invoices,
+  onSelectOrder,
+  loadingOrderId,
 }: {
   orders: CompletedOrder[];
   invoices: InvoiceRow[];
+  onSelectOrder: (orderId: string) => void | Promise<void>;
+  loadingOrderId: string | null;
 }) {
   const pending = filterPendingInvoice(orders, invoices);
 
@@ -49,7 +53,13 @@ export default function PendingList({
     children: (
       <>
         {g.orders.map((o) => (
-          <PendingCard key={o.order_id} order={o} />
+          <PendingCard
+            key={o.order_id}
+            order={o}
+            onSelect={onSelectOrder}
+            loading={loadingOrderId === o.order_id}
+            disabled={loadingOrderId !== null && loadingOrderId !== o.order_id}
+          />
         ))}
       </>
     ),
@@ -58,7 +68,17 @@ export default function PendingList({
   return <MonthAccordion items={items} defaultOpenKey={defaultOpenKey} />;
 }
 
-function PendingCard({ order }: { order: CompletedOrder }) {
+function PendingCard({
+  order,
+  onSelect,
+  loading,
+  disabled,
+}: {
+  order: CompletedOrder;
+  onSelect: (orderId: string) => void | Promise<void>;
+  loading: boolean;
+  disabled: boolean;
+}) {
   const c = order.customer;
   const customerDisplay = toProper(c.name_roma) || c.name_kanji || "—";
   const apartmentUnit =
@@ -96,12 +116,18 @@ function PendingCard({ order }: { order: CompletedOrder }) {
 
         <button
           type="button"
-          onClick={() =>
-            alert(`(Coming next) Buat invoice untuk ${order.order_id}`)
-          }
-          className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-2 active:scale-[0.98] transition"
+          onClick={() => onSelect(order.order_id)}
+          disabled={disabled || loading}
+          className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold px-3 py-2 active:scale-[0.98] transition"
         >
-          + Invoice
+          {loading ? (
+            <>
+              <span className="inline-block animate-spin">⟳</span>
+              <span>Memuat...</span>
+            </>
+          ) : (
+            "+ Invoice"
+          )}
         </button>
       </div>
     </article>
