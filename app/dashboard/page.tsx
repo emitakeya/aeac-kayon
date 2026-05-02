@@ -86,11 +86,11 @@ export default async function DashboardPage() {
           Halaman Tersedia
         </h3>
         <div className="space-y-2">
-          {me.can_view_tech_pages && (
+          {me.can_view_mm && (
             <PageLink
-              href="/komisi-teknisi"
-              title="Rekap Komisi Teknisi"
-              subtitle="Lihat komisi per teknisi & per kuartal"
+              href="/booking-list-confirmed"
+              title="Booking List (Confirmed)"
+              subtitle="Lihat pesanan terkonfirmasi yang akan datang"
             />
           )}
           {me.can_view_finance && (
