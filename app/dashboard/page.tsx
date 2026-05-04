@@ -100,16 +100,23 @@ export default async function DashboardPage() {
               subtitle="Lihat pesanan terkonfirmasi yang akan datang"
             />
           )}
-          {me.can_view_finance && (
-            <PageLink
-              href="/invoice-admin"
-              title="Invoice Admin"
-              subtitle="Kelola dan kirim invoice ke customer"
-            />
-          )}
-          {me.can_admin && (
-            <PageLink title="Booking List & Cancel" subtitle="Belum dibangun" disabled />
-          )}
+{me.can_view_finance && (
+  <PageLink
+    href="/invoice-admin"
+    title="Invoice Admin"
+    subtitle="Kelola dan kirim invoice ke customer"
+  />
+)}
+{(me.can_admin || me.can_view_finance) && (
+  <PageLink
+    href="/komisi-marketing"
+    title="Rekap Komisi Marketing"
+    subtitle="Komisi tim marketing per tahun"
+  />
+)}
+{me.can_admin && (
+  <PageLink title="Booking List & Cancel" subtitle="Belum dibangun" disabled />
+)}
           {me.role === 'technician' && (
             <PageLink title="Laporan Teknisi" subtitle="Belum dibangun" disabled />
           )}
