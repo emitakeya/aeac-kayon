@@ -1,8 +1,12 @@
 // lib/bookings.ts
-// Types + helpers for /booking-list-confirmed.
+// Types + helpers for /booking-list-confirmed AND /booking-list-mobile.
 // Parses order_id and scheduled_date the same way the WP shortcode does.
+//
+// History: this file was originally added for /booking-list-confirmed (MM staff,
+// no cancelled). Extended May 2026 for /booking-list-mobile (techs see all
+// statuses including cancelled). Both pages share the same types and helpers.
 
-export type BookingStatus = "pending" | "confirmed" | "completed";
+export type BookingStatus = "pending" | "confirmed" | "completed" | "cancelled";
 
 export type BookingRow = {
   order_id: string;
@@ -84,20 +88,30 @@ export function groupByDate(bookings: BookingRow[]): DayGroup[] {
 
 // ──────────────────────────────────────────
 // Status counts for the summary pills.
+// `cancelled` is included for /booking-list-mobile; /booking-list-confirmed
+// will simply ignore the field since cancelled is filtered out at the RPC level.
 // ──────────────────────────────────────────
 export type StatusCounts = {
   total: number;
   pending: number;
   confirmed: number;
   completed: number;
+  cancelled: number;
 };
 
 export function statusCounts(bookings: BookingRow[]): StatusCounts {
-  const c: StatusCounts = { total: bookings.length, pending: 0, confirmed: 0, completed: 0 };
+  const c: StatusCounts = {
+    total: bookings.length,
+    pending: 0,
+    confirmed: 0,
+    completed: 0,
+    cancelled: 0,
+  };
   for (const b of bookings) {
     if (b.status === "pending") c.pending++;
     else if (b.status === "confirmed") c.confirmed++;
     else if (b.status === "completed") c.completed++;
+    else if (b.status === "cancelled") c.cancelled++;
   }
   return c;
 }
