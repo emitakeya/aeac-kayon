@@ -19,6 +19,10 @@
 //     BookingListClient wrapper, which calls DateAccordion internally.
 //     Server-side this file is now data-fetch only.
 //
+// May 14, 2026 update (Cancel integration):
+//   • Compute canCancel = me.can_admin || me.can_view_finance and pass it down
+//     so admin/finance users see a "Batalkan" link inside each cancellable card.
+//
 // URL kept as /booking-list-confirmed for bookmark compatibility — the name
 // is slightly stale now ("confirmed" no longer accurate), but renaming the
 // route would break any saved links. Dashboard label changed to "Daftar Booking".
@@ -81,6 +85,10 @@ async function BookingListContent() {
   if (!me) redirect("/login");
   if (!me.can_view_mm && !me.can_view_tech_pages) redirect("/403");
 
+  // Admin + finance can cancel from inside the booking list. This flag controls
+  // whether a "Batalkan" link is shown on each cancellable card.
+  const canCancel: boolean = Boolean(me.can_admin || me.can_view_finance);
+
   const { data, error } = await supabase.rpc("get_bookings_confirmed");
 
   if (error) {
@@ -90,7 +98,7 @@ async function BookingListContent() {
   const bookings: BookingRow[] = (data ?? []) as BookingRow[];
   const today = todayInJakarta();
 
-  return <BookingListClient bookings={bookings} today={today} />;
+  return <BookingListClient bookings={bookings} today={today} canCancel={canCancel} />;
 }
 
 // Inline styles for this page only — scoped via the .aw class on root.
@@ -157,23 +165,19 @@ function PageStyles() {
       .aw .a-pill-stat.completed { background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.25);color: #1e3a5f; }
       .aw .a-pill-stat.cancelled { background: rgba(220,38,38,0.08);  border-color: rgba(220,38,38,0.25); color: #991b1b; }
 
-      /* ── Sticky filter bar (NEW May 14, 2026) ── */
+      /* ── Sticky filter bar ── */
       .aw .a-filter-bar {
         position: sticky;
         top: 0;
         z-index: 10;
         background: var(--bg);
-        padding: 8px 0 10px;
-        margin: -2px 0 12px;
-        border-bottom: 1px solid var(--border);
+        padding: 6px 0 10px;
+        margin: 0 0 10px;
       }
-      .aw .a-search-wrap {
-        position: relative;
-        margin-bottom: 8px;
-      }
+      .aw .a-search-wrap { position: relative; margin-bottom: 8px; }
       .aw .a-search-input {
         width: 100%;
-        padding: 9px 12px 9px 32px;
+        padding: 9px 32px 9px 30px;
         font-size: 13px;
         font-family: inherit;
         background: #fff;
@@ -279,6 +283,7 @@ function PageStyles() {
 
       .aw .a-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 6px; flex-wrap: wrap; }
       .aw .a-card-top-left { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .aw .a-card-top-right { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
       .aw .a-order-id { font-family: monospace; font-size: 11px; background: rgba(17,24,39,0.06); padding: 3px 8px; border-radius: 6px; color: var(--dark); font-weight: 500; }
 
       .aw .a-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
@@ -287,7 +292,7 @@ function PageStyles() {
       .aw .badge-completed { background: rgba(59,130,246,0.1);  color: #1e3a5f; }
       .aw .badge-cancelled { background: rgba(220,38,38,0.1);   color: #991b1b; }
 
-      /* ── Paid pill (NEW May 14, 2026) ── */
+      /* ── Paid pill ── */
       .aw .a-paid-pill {
         display: inline-flex;
         align-items: center;
@@ -302,6 +307,32 @@ function PageStyles() {
         white-space: nowrap;
         flex-shrink: 0;
       }
+
+      /* ── Cancel link (NEW) ── */
+      .aw .a-cancel-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 3px 9px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+        background: rgba(220,38,38,0.08);
+        color: #991b1b;
+        border: 1px solid rgba(220,38,38,0.25);
+        text-decoration: none;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition: all 0.15s;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .aw .a-cancel-link:hover {
+        background: rgba(220,38,38,0.15);
+        border-color: rgba(220,38,38,0.4);
+        text-decoration: none;
+      }
+      .aw .a-cancel-link:active { transform: scale(0.97); }
 
       .aw .a-session-pill { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; margin-left: 6px; }
       .aw .session-am { background: #fef3c7; color: #92400e; }

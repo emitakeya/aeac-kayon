@@ -132,10 +132,15 @@ export default async function DashboardPage() {
             />
           )}
 
-          {/* Not yet built — keep visible as disabled placeholders so the
-              roadmap stays obvious. Remove once they ship. */}
-          {me.can_admin && (
-            <PageLink title="Booking List & Cancel" subtitle="Belum dibangun" disabled />
+          {/* Cancel — admin + finance only.
+              Shipped May 14, 2026 — replaces the "Booking List & Cancel"
+              placeholder card. */}
+          {(me.can_view_finance || me.can_admin) && (
+            <PageLink
+              href="/cancel"
+              title="Cancel"
+              subtitle="Batalkan pesanan yang masih pending atau confirmed"
+            />
           )}
         </div>
       </section>

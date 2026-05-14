@@ -12,6 +12,10 @@
 //   • Status: bookings whose status is in the checked set
 //   • Search: case-insensitive match against name_roma / name_kanji /
 //             apartment / unit / order_id
+//
+// May 14, 2026 update (Cancel integration):
+//   • Accepts canCancel prop and threads it down to DateAccordion so that
+//     admin/finance users see a "Batalkan" link inside each cancellable card.
 
 import { useMemo, useState } from "react";
 import {
@@ -34,9 +38,15 @@ const ALL_STATUSES: BookingStatus[] = [
 type Props = {
   bookings: BookingRow[];
   today: string;
+  /** When true, render a "Batalkan" link on cancellable cards. */
+  canCancel?: boolean;
 };
 
-export default function BookingListClient({ bookings, today }: Props) {
+export default function BookingListClient({
+  bookings,
+  today,
+  canCancel = false,
+}: Props) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<Set<BookingStatus>>(
     () => new Set(ALL_STATUSES)
@@ -172,7 +182,7 @@ export default function BookingListClient({ bookings, today }: Props) {
           )}
         </div>
       ) : (
-        <DateAccordion groups={groups} today={today} />
+        <DateAccordion groups={groups} today={today} canCancel={canCancel} />
       )}
     </>
   );

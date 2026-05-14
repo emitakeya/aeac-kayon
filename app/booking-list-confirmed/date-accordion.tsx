@@ -11,10 +11,16 @@
 //   • Indonesian status badge labels (uses STATUS_LABEL_ID from lib/bookings)
 //   • "✅ Sudah Bayar" pill rendered on card top when b.is_paid === true
 //
+// May 14, 2026 update (Cancel integration):
+//   • Accepts canCancel prop. When true AND status ∈ {pending, confirmed},
+//     renders a small red "Batalkan" link next to the status badge that
+//     navigates to /cancel?order_id=<id> with the order pre-selected.
+//
 // This component is now a pure renderer; filter state lives in
 // BookingListClient (parent). It receives already-filtered+grouped data.
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   type BookingRow,
   type DayGroup,
@@ -29,6 +35,7 @@ import {
 type Props = {
   groups: DayGroup[];
   today: string;
+  canCancel?: boolean;
 };
 
 // Indonesian weekday abbreviations for the date tile
@@ -44,7 +51,7 @@ function getDateNumAndDow(dateKey: string): { num: string; dow: string } {
   };
 }
 
-export default function DateAccordion({ groups, today }: Props) {
+export default function DateAccordion({ groups, today, canCancel = false }: Props) {
   // Store ONLY user-toggled overrides. The default "open/closed" state is
   // computed fresh on every render from (g.dateKey === today). This avoids
   // a class of bugs where useState's initial value would be a snapshot of
@@ -103,7 +110,7 @@ export default function DateAccordion({ groups, today }: Props) {
             >
               <div className="a-date-body-inner">
                 {g.bookings.map((b) => (
-                  <BookingCard key={b.order_id} b={b} />
+                  <BookingCard key={b.order_id} b={b} canCancel={canCancel} />
                 ))}
               </div>
             </div>
@@ -117,7 +124,7 @@ export default function DateAccordion({ groups, today }: Props) {
 // ──────────────────────────────────────────
 // Single booking card
 // ──────────────────────────────────────────
-function BookingCard({ b }: { b: BookingRow }) {
+function BookingCard({ b, canCancel }: { b: BookingRow; canCancel: boolean }) {
   const session = extractSession(b.scheduled_date);
   const status = (b.status ?? "pending") as string;
   // Use Indonesian label when status is a recognized BookingStatus; otherwise
@@ -143,6 +150,11 @@ function BookingCard({ b }: { b: BookingRow }) {
 
   const cardClass = status === "cancelled" ? "a-bcard cancelled" : "a-bcard";
 
+  // "Batalkan" link visible only when caller granted cancel permission
+  // AND the order is still in a cancellable state.
+  const showCancelLink =
+    canCancel && (status === "pending" || status === "confirmed");
+
   return (
     <div className={cardClass}>
       <div className="a-card-top">
@@ -154,7 +166,18 @@ function BookingCard({ b }: { b: BookingRow }) {
             </span>
           )}
         </div>
-        <span className={`a-badge badge-${status}`}>{badgeLabel}</span>
+        <div className="a-card-top-right">
+          {showCancelLink && (
+            <Link
+              href={`/cancel?order_id=${encodeURIComponent(b.order_id)}`}
+              className="a-cancel-link"
+              aria-label={`Batalkan ${b.order_id}`}
+            >
+              🚫 Batalkan
+            </Link>
+          )}
+          <span className={`a-badge badge-${status}`}>{badgeLabel}</span>
+        </div>
       </div>
 
       <div className="a-card-name">
