@@ -86,13 +86,7 @@ export default async function DashboardPage() {
           Halaman Tersedia
         </h3>
         <div className="space-y-2">
-          {me.can_view_tech_pages && (
-            <PageLink
-              href="/komisi-teknisi"
-              title="Rekap Komisi Teknisi"
-              subtitle="Lihat komisi per teknisi & per kuartal"
-            />
-          )}
+          {/* Booking list — anyone who can view MM bookings */}
           {me.can_view_mm && (
             <PageLink
               href="/booking-list-confirmed"
@@ -100,25 +94,48 @@ export default async function DashboardPage() {
               subtitle="Lihat pesanan terkonfirmasi yang akan datang"
             />
           )}
-{me.can_view_finance && (
-  <PageLink
-    href="/invoice-admin"
-    title="Invoice Admin"
-    subtitle="Kelola dan kirim invoice ke customer"
-  />
-)}
-{(me.can_admin || me.can_view_finance) && (
-  <PageLink
-    href="/komisi-marketing"
-    title="Rekap Komisi Marketing"
-    subtitle="Komisi tim marketing per tahun"
-  />
-)}
-{me.can_admin && (
-  <PageLink title="Booking List & Cancel" subtitle="Belum dibangun" disabled />
-)}
-          {me.role === 'technician' && (
-            <PageLink title="Laporan Teknisi" subtitle="Belum dibangun" disabled />
+
+          {/* Laporan Teknisi — techs + admin (admin/finance for testing).
+              The RPC enforces the real check (can_view_tech_pages OR can_admin). */}
+          {(me.can_view_tech_pages || me.can_admin) && (
+            <PageLink
+              href="/laporan-teknisi"
+              title="Laporan Teknisi"
+              subtitle="Buat laporan setelah selesai pengerjaan"
+            />
+          )}
+
+          {/* Rekap Komisi Teknisi — techs see their own; admin/finance see all */}
+          {me.can_view_tech_pages && (
+            <PageLink
+              href="/komisi-teknisi"
+              title="Rekap Komisi Teknisi"
+              subtitle="Lihat komisi per teknisi & per kuartal"
+            />
+          )}
+
+          {/* Rekap Komisi Marketing — admin + finance */}
+          {(me.can_view_finance || me.can_admin) && (
+            <PageLink
+              href="/komisi-marketing"
+              title="Rekap Komisi Marketing"
+              subtitle="Lihat komisi per pasangan marketing"
+            />
+          )}
+
+          {/* Invoice Admin — admin + finance */}
+          {(me.can_view_finance || me.can_admin) && (
+            <PageLink
+              href="/invoice-admin"
+              title="Invoice Admin"
+              subtitle="Kelola dan kirim invoice ke customer"
+            />
+          )}
+
+          {/* Not yet built — keep visible as disabled placeholders so the
+              roadmap stays obvious. Remove once they ship. */}
+          {me.can_admin && (
+            <PageLink title="Booking List & Cancel" subtitle="Belum dibangun" disabled />
           )}
         </div>
       </section>
