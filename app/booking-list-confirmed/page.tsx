@@ -63,7 +63,6 @@ export default function Page() {
       </div>
 
       <Suspense fallback={<BookingListSkeleton />}>
-        {/* @ts-expect-error Async Server Component */}
         <BookingListContent />
       </Suspense>
     </main>
