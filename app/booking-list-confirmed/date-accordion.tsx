@@ -45,15 +45,16 @@ function getDateNumAndDow(dateKey: string): { num: string; dow: string } {
 }
 
 export default function DateAccordion({ groups, today }: Props) {
-  // Initial open-state: only today open, past + future closed
-  const initialOpen: Record<string, boolean> = {};
-  for (const g of groups) {
-    initialOpen[g.dateKey] = g.dateKey === today;
-  }
-  const [openMap, setOpenMap] = useState<Record<string, boolean>>(initialOpen);
+  // Store ONLY user-toggled overrides. The default "open/closed" state is
+  // computed fresh on every render from (g.dateKey === today). This avoids
+  // a class of bugs where useState's initial value would be a snapshot of
+  // `groups` taken at first mount — if the parent re-renders with a different
+  // groups array (e.g. after a filter change) we'd end up with stale or
+  // missing keys in the openMap.
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
 
-  const toggle = (dateKey: string) => {
-    setOpenMap((prev) => ({ ...prev, [dateKey]: !prev[dateKey] }));
+  const toggle = (dateKey: string, currentlyOpen: boolean) => {
+    setOverrides((prev) => ({ ...prev, [dateKey]: !currentlyOpen }));
   };
 
   return (
@@ -61,7 +62,9 @@ export default function DateAccordion({ groups, today }: Props) {
       {groups.map((g) => {
         const isToday = g.dateKey === today;
         const isPast = isPastDate(g.dateKey, today);
-        const isOpen = openMap[g.dateKey] ?? false;
+        // Default: only today opens automatically. User toggles win.
+        const defaultOpen = g.dateKey === today;
+        const isOpen = overrides[g.dateKey] ?? defaultOpen;
         const { num, dow } = getDateNumAndDow(g.dateKey);
 
         return (
@@ -77,7 +80,7 @@ export default function DateAccordion({ groups, today }: Props) {
             <button
               type="button"
               className="a-date-header"
-              onClick={() => toggle(g.dateKey)}
+              onClick={() => toggle(g.dateKey, isOpen)}
               aria-expanded={isOpen}
             >
               <div className="a-date-left">
