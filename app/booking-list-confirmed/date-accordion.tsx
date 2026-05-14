@@ -6,6 +6,13 @@
 //   • Cancelled status badge + faded card background
 //   • Date-tile icon (12 / SEL) in each accordion header
 //   • Green "WA" pill next to phone numbers that link to WhatsApp
+//
+// May 14, 2026 update (Phase 2 of enhancement):
+//   • Indonesian status badge labels (uses STATUS_LABEL_ID from lib/bookings)
+//   • "✅ Sudah Bayar" pill rendered on card top when b.is_paid === true
+//
+// This component is now a pure renderer; filter state lives in
+// BookingListClient (parent). It receives already-filtered+grouped data.
 
 import { useState } from "react";
 import {
@@ -16,6 +23,7 @@ import {
   isPastDate,
   extractSession,
   waLink,
+  STATUS_LABEL_ID,
 } from "@/lib/bookings";
 
 type Props = {
@@ -109,12 +117,10 @@ export default function DateAccordion({ groups, today }: Props) {
 function BookingCard({ b }: { b: BookingRow }) {
   const session = extractSession(b.scheduled_date);
   const status = (b.status ?? "pending") as string;
+  // Use Indonesian label when status is a recognized BookingStatus; otherwise
+  // fall back to the raw string (defensive).
   const badgeLabel =
-    status === "pending"   ? "Pending"
-  : status === "confirmed" ? "Confirmed"
-  : status === "completed" ? "Selesai"
-  : status === "cancelled" ? "Cancelled"
-  : status;
+    (STATUS_LABEL_ID as Record<string, string>)[status] ?? status;
 
   const tenant = b.name_roma ?? "—";
   const apartment = b.apartment ?? "—";
@@ -127,6 +133,7 @@ function BookingCard({ b }: { b: BookingRow }) {
   const waitPhone = b.wait_phone ?? "";
   const notes = b.notes ?? "";
   const services = b.services ?? [];
+  const isPaid = b.is_paid === true;
 
   const phoneWa = waLink(phone);
   const waitPhoneWa = waLink(waitPhone);
@@ -136,7 +143,14 @@ function BookingCard({ b }: { b: BookingRow }) {
   return (
     <div className={cardClass}>
       <div className="a-card-top">
-        <span className="a-order-id">{b.order_id}</span>
+        <div className="a-card-top-left">
+          <span className="a-order-id">{b.order_id}</span>
+          {isPaid && (
+            <span className="a-paid-pill" aria-label="Sudah dibayar">
+              ✅ Sudah Bayar
+            </span>
+          )}
+        </div>
         <span className={`a-badge badge-${status}`}>{badgeLabel}</span>
       </div>
 

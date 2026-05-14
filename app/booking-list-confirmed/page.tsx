@@ -12,6 +12,13 @@
 //   • Added Suspense loading skeleton
 //   • Added green "WA" badge pills next to WhatsApp-capable phone numbers
 //
+// May 14, 2026 update (Phase 2 of enhancement):
+//   • RPC now returns today + 14 days only (was: today - 3 onwards)
+//   • RPC now returns is_paid boolean (joined from invoices.status='paid')
+//   • Filter state (search + status checkboxes) moved into new
+//     BookingListClient wrapper, which calls DateAccordion internally.
+//     Server-side this file is now data-fetch only.
+//
 // URL kept as /booking-list-confirmed for bookmark compatibility — the name
 // is slightly stale now ("confirmed" no longer accurate), but renaming the
 // route would break any saved links. Dashboard label changed to "Daftar Booking".
@@ -22,11 +29,9 @@ import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import {
   type BookingRow,
-  groupByDate,
-  statusCounts,
   todayInJakarta,
 } from "@/lib/bookings";
-import DateAccordion from "./date-accordion";
+import BookingListClient from "./booking-list-client";
 import BookingListSkeleton from "./loading-skeleton";
 
 export const dynamic = "force-dynamic";
@@ -67,6 +72,7 @@ export default function Page() {
 
 // ──────────────────────────────────────────
 // Async data-fetching content, wrapped in Suspense above.
+// All filter / sort / grouping happens in BookingListClient (a Client Component).
 // ──────────────────────────────────────────
 async function BookingListContent() {
   const supabase = await createClient();
@@ -83,35 +89,9 @@ async function BookingListContent() {
   }
 
   const bookings: BookingRow[] = (data ?? []) as BookingRow[];
-  const counts = statusCounts(bookings);
-  const groups = groupByDate(bookings);
   const today = todayInJakarta();
 
-  return (
-    <>
-      <div className="a-summary">
-        <span className="a-pill-stat">Total: {counts.total}</span>
-        {counts.pending > 0 && (
-          <span className="a-pill-stat pending">Pending: {counts.pending}</span>
-        )}
-        {counts.confirmed > 0 && (
-          <span className="a-pill-stat confirmed">Confirmed: {counts.confirmed}</span>
-        )}
-        {counts.completed > 0 && (
-          <span className="a-pill-stat completed">Selesai: {counts.completed}</span>
-        )}
-        {counts.cancelled > 0 && (
-          <span className="a-pill-stat cancelled">Cancelled: {counts.cancelled}</span>
-        )}
-      </div>
-
-      {groups.length === 0 ? (
-        <div className="a-empty">😴 Tidak ada pesanan ditemukan.</div>
-      ) : (
-        <DateAccordion groups={groups} today={today} />
-      )}
-    </>
-  );
+  return <BookingListClient bookings={bookings} today={today} />;
 }
 
 // Inline styles for this page only — scoped via the .aw class on root.
@@ -178,6 +158,93 @@ function PageStyles() {
       .aw .a-pill-stat.completed { background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.25);color: #1e3a5f; }
       .aw .a-pill-stat.cancelled { background: rgba(220,38,38,0.08);  border-color: rgba(220,38,38,0.25); color: #991b1b; }
 
+      /* ── Sticky filter bar (NEW May 14, 2026) ── */
+      .aw .a-filter-bar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: var(--bg);
+        padding: 8px 0 10px;
+        margin: -2px 0 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      .aw .a-search-wrap {
+        position: relative;
+        margin-bottom: 8px;
+      }
+      .aw .a-search-input {
+        width: 100%;
+        padding: 9px 12px 9px 32px;
+        font-size: 13px;
+        font-family: inherit;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        color: var(--text);
+        outline: none;
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+      .aw .a-search-input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(245,158,11,0.12);
+      }
+      .aw .a-search-icon {
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 13px;
+        color: var(--muted);
+        pointer-events: none;
+      }
+      .aw .a-search-clear {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 22px;
+        height: 22px;
+        border: 0;
+        background: rgba(0,0,0,0.06);
+        color: var(--muted);
+        border-radius: 50%;
+        font-size: 14px;
+        line-height: 1;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        font-family: inherit;
+      }
+      .aw .a-search-clear:hover { background: rgba(0,0,0,0.12); color: var(--text); }
+      .aw .a-status-checks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .aw .a-check-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 10px 5px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 500;
+        background: #fff;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.12s;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .aw .a-check-pill input { margin: 0; cursor: pointer; accent-color: var(--accent2); }
+      .aw .a-check-pill.checked.pending   { background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.35); color: #92400e; }
+      .aw .a-check-pill.checked.confirmed { background: rgba(22,163,74,0.1);   border-color: rgba(22,163,74,0.35);  color: #14532d; }
+      .aw .a-check-pill.checked.completed { background: rgba(59,130,246,0.1);  border-color: rgba(59,130,246,0.35); color: #1e3a5f; }
+      .aw .a-check-pill.checked.cancelled { background: rgba(220,38,38,0.1);   border-color: rgba(220,38,38,0.35);  color: #991b1b; }
+
       /* ── States ── */
       .aw .a-empty { text-align: center; padding: 40px 16px; color: var(--muted); font-size: 14px; background: #fff; border-radius: 12px; border: 1px solid var(--border); }
       .aw .a-err-msg { padding: 14px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 10px; font-size: 13px; }
@@ -211,7 +278,8 @@ function PageStyles() {
       .aw .a-bcard:last-child { margin-bottom: 0; }
       .aw .a-bcard.cancelled { background: #fef2f2; border-color: #fecaca; }
 
-      .aw .a-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; }
+      .aw .a-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 6px; flex-wrap: wrap; }
+      .aw .a-card-top-left { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
       .aw .a-order-id { font-family: monospace; font-size: 11px; background: rgba(17,24,39,0.06); padding: 3px 8px; border-radius: 6px; color: var(--dark); font-weight: 500; }
 
       .aw .a-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
@@ -219,6 +287,22 @@ function PageStyles() {
       .aw .badge-confirmed { background: rgba(22,163,74,0.1);   color: #14532d; }
       .aw .badge-completed { background: rgba(59,130,246,0.1);  color: #1e3a5f; }
       .aw .badge-cancelled { background: rgba(220,38,38,0.1);   color: #991b1b; }
+
+      /* ── Paid pill (NEW May 14, 2026) ── */
+      .aw .a-paid-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 3px 9px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+        background: rgba(22,163,74,0.12);
+        color: #14532d;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
 
       .aw .a-session-pill { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; margin-left: 6px; }
       .aw .session-am { background: #fef3c7; color: #92400e; }
