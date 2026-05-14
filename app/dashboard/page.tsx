@@ -1,7 +1,3 @@
-// app/dashboard/page.tsx
-// Updated May 12, 2026 — merged /booking-list-mobile and /booking-list-confirmed
-// into a single entry. Visible to anyone with can_view_mm OR can_view_tech_pages.
-
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
@@ -45,9 +41,6 @@ export default async function DashboardPage() {
       />
     );
   }
-
-  // True if user can see the merged Daftar Booking page (MM staff + tech + admin/finance)
-  const canViewBookings = Boolean(me.can_view_mm || me.can_view_tech_pages);
 
   return (
     <main className="min-h-screen px-4 py-6 max-w-2xl mx-auto">
@@ -93,6 +86,26 @@ export default async function DashboardPage() {
           Halaman Tersedia
         </h3>
         <div className="space-y-2">
+          {/* Booking list — anyone who can view MM bookings */}
+          {me.can_view_mm && (
+            <PageLink
+              href="/booking-list-confirmed"
+              title="Booking List (Confirmed)"
+              subtitle="Lihat pesanan terkonfirmasi yang akan datang"
+            />
+          )}
+
+          {/* Laporan Teknisi — techs + admin (admin/finance for testing).
+              The RPC enforces the real check (can_view_tech_pages OR can_admin). */}
+          {(me.can_view_tech_pages || me.can_admin) && (
+            <PageLink
+              href="/laporan-teknisi"
+              title="Laporan Teknisi"
+              subtitle="Buat laporan setelah selesai pengerjaan"
+            />
+          )}
+
+          {/* Rekap Komisi Teknisi — techs see their own; admin/finance see all */}
           {me.can_view_tech_pages && (
             <PageLink
               href="/komisi-teknisi"
@@ -100,21 +113,29 @@ export default async function DashboardPage() {
               subtitle="Lihat komisi per teknisi & per kuartal"
             />
           )}
-          {canViewBookings && (
+
+          {/* Rekap Komisi Marketing — admin + finance */}
+          {(me.can_view_finance || me.can_admin) && (
             <PageLink
-              href="/booking-list-confirmed"
-              title="Daftar Booking"
-              subtitle="Booking 3 hari terakhir & mendatang"
+              href="/komisi-marketing"
+              title="Rekap Komisi Marketing"
+              subtitle="Lihat komisi per pasangan marketing"
             />
           )}
-          {me.can_view_finance && (
-            <PageLink title="Invoice Admin" subtitle="Belum dibangun" disabled />
+
+          {/* Invoice Admin — admin + finance */}
+          {(me.can_view_finance || me.can_admin) && (
+            <PageLink
+              href="/invoice-admin"
+              title="Invoice Admin"
+              subtitle="Kelola dan kirim invoice ke customer"
+            />
           )}
+
+          {/* Not yet built — keep visible as disabled placeholders so the
+              roadmap stays obvious. Remove once they ship. */}
           {me.can_admin && (
             <PageLink title="Booking List & Cancel" subtitle="Belum dibangun" disabled />
-          )}
-          {me.role === 'technician' && (
-            <PageLink title="Laporan Teknisi" subtitle="Belum dibangun" disabled />
           )}
         </div>
       </section>
@@ -165,16 +186,16 @@ function PageLink({
   const base = 'block bg-white border border-neutral-200 rounded-xl px-4 py-3 transition';
   if (disabled || !href) {
     return (
-      <div className={`${base} opacity-50 cursor-not-allowed`}>
-        <p className="text-sm font-medium text-neutral-900">{title}</p>
-        <p className="text-xs text-neutral-500 mt-0.5">{subtitle}</p>
+      <div className={`${base} opacity-60 cursor-not-allowed`}>
+        <div className="text-sm font-medium text-neutral-700">{title}</div>
+        <div className="text-[11px] text-neutral-500 mt-0.5">{subtitle}</div>
       </div>
     );
   }
   return (
-    <Link href={href} className={`${base} hover:border-amber-300 hover:shadow-sm active:scale-[0.99]`}>
-      <p className="text-sm font-medium text-neutral-900">{title}</p>
-      <p className="text-xs text-neutral-500 mt-0.5">{subtitle}</p>
+    <Link href={href} className={`${base} hover:bg-amber-50 hover:border-amber-200`}>
+      <div className="text-sm font-medium text-neutral-900">{title}</div>
+      <div className="text-[11px] text-neutral-500 mt-0.5">{subtitle}</div>
     </Link>
   );
 }
@@ -182,8 +203,12 @@ function PageLink({
 function Cap({ label, v }: { label: string; v: boolean }) {
   return (
     <li className="flex items-center justify-between">
-      <span className="font-mono text-neutral-600">{label}</span>
-      <span className={v ? 'text-emerald-600 font-medium' : 'text-neutral-400'}>
+      <code className="text-neutral-600">{label}</code>
+      <span
+        className={`font-mono text-[11px] px-1.5 py-0.5 rounded ${
+          v ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-200 text-neutral-500'
+        }`}
+      >
         {v ? 'true' : 'false'}
       </span>
     </li>
@@ -200,15 +225,11 @@ function ErrorScreen({
   email: string | null;
 }) {
   return (
-    <main className="min-h-screen px-4 py-6 max-w-2xl mx-auto flex items-center justify-center">
-      <div className="bg-white border border-neutral-200 rounded-2xl p-6 shadow-sm w-full">
-        <h1 className="text-lg font-semibold text-neutral-900 mb-2">{title}</h1>
-        <p className="text-sm text-neutral-700 mb-3">{detail}</p>
-        {email && (
-          <p className="text-xs text-neutral-500 mb-4">
-            Anda masuk sebagai: <span className="font-mono">{email}</span>
-          </p>
-        )}
+    <main className="min-h-screen flex items-center justify-center px-4">
+      <div className="max-w-sm w-full bg-white border border-neutral-200 rounded-2xl p-6 text-center shadow-sm">
+        <h1 className="text-base font-semibold text-neutral-900 mb-2">{title}</h1>
+        <p className="text-xs text-neutral-600 leading-relaxed mb-4">{detail}</p>
+        {email ? <p className="text-[11px] text-neutral-400 mb-4">Email: {email}</p> : null}
         <LogoutButton />
       </div>
     </main>
