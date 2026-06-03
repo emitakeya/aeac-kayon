@@ -7,6 +7,9 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // `tech-invoice` is public (token-gated, opened from an email link with no
+    // login), so it's excluded here alongside `api` — updateSession never runs
+    // on it and therefore can't redirect a tech to /login.
+    '/((?!api|tech-invoice|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
