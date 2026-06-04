@@ -4,9 +4,12 @@
 // Admin only. Uses the service-role admin client to call signInWithOtp
 // without rate-limiting through the user's own session.
 //
-// Note: this uses the standard `signInWithOtp` flow which sends Supabase's
-// configured email template. Make sure the redirect URL in the Supabase
-// dashboard's email template includes kayon.aeac-service.id.
+// IMPORTANT: AEAC magic links must ALWAYS return to Kayon. The Supabase
+// project is shared with MM Property / BBMAX, whose Site URL is
+// bbmax.maisonmap.com. The redirect base is hardcoded to Kayon here so a
+// stray NEXT_PUBLIC_SITE_URL env value cannot send technicians to the wrong
+// app. (`https://kayon.aeac-service.id/**` is on the Supabase redirect
+// allow-list, so this redirect is permitted.)
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
@@ -14,6 +17,10 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+// AEAC's own origin — do NOT read this from NEXT_PUBLIC_SITE_URL, which is a
+// shared/ambiguous value across projects.
+const KAYON_BASE = 'https://kayon.aeac-service.id';
 
 interface Body {
   email?: string;
@@ -71,17 +78,15 @@ export async function POST(request: Request) {
 
   // Send the magic link via the admin client. We use signInWithOtp with
   // shouldCreateUser=false so this can ONLY be used to log in existing users
-  // (not as a backdoor to create new ones).
+  // (not as a backdoor to create new ones). emailRedirectTo is pinned to
+  // Kayon so the link always returns to this app.
   const admin = createAdminClient();
-
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ?? 'https://kayon.aeac-service.id';
 
   const { error } = await admin.auth.signInWithOtp({
     email,
     options: {
       shouldCreateUser: false,
-      emailRedirectTo: `${siteUrl}/auth/callback`,
+      emailRedirectTo: `${KAYON_BASE}/auth/callback`,
     },
   });
 
