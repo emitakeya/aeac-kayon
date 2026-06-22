@@ -1,16 +1,16 @@
 // app/laporan-teknisi/step5-review.tsx
-// Step 5: review summary + submit. The actual submit logic lives in the
-// parent (laporan-form.tsx); this component just displays the data and
-// the current submit stage.
+// Step 5: review summary + editable invoice + submit. The submit logic lives
+// in the parent (laporan-form.tsx); this component displays the data, folds in
+// the invoice editor card, and GATES the submit button so a technician can't
+// send an invoice with an empty name, qty 0, price 0, or total 0.
 
 "use client";
 
-import type {
-  LaporanOrder,
-  LaporanService,
-} from "@/lib/laporan";
-import { customerDisplayName, fmtRp } from "@/lib/laporan";
+import type { LaporanOrder, LaporanService } from "@/lib/laporan";
+import { customerDisplayName } from "@/lib/laporan";
+import { type LineItem, calcTotal } from "@/lib/invoices";
 import type { StagedPhoto } from "./laporan-form";
+import InvoiceEditorCard from "./invoice-editor-card";
 
 export default function Step5Review({
   order,
@@ -25,6 +25,11 @@ export default function Step5Review({
   selectedPerbaikan,
   photosBefore,
   photosAfter,
+  invoiceItems,
+  setInvoiceItems,
+  invoiceDiscount,
+  setInvoiceDiscount,
+  onResetInvoice,
   submitStage,
   submitStageLabel,
   submitError,
@@ -43,6 +48,11 @@ export default function Step5Review({
   selectedPerbaikan: string[];
   photosBefore: StagedPhoto[];
   photosAfter: StagedPhoto[];
+  invoiceItems: LineItem[];
+  setInvoiceItems: React.Dispatch<React.SetStateAction<LineItem[]>>;
+  invoiceDiscount: number;
+  setInvoiceDiscount: React.Dispatch<React.SetStateAction<number>>;
+  onResetInvoice: () => void;
   submitStage: string;
   submitStageLabel: string;
   submitError: string | null;
@@ -63,13 +73,29 @@ export default function Step5Review({
       return { name, qty, price, subtotal };
     });
 
-  const workTotal = workRows.reduce((s, r) => s + r.subtotal, 0);
+  // ───────────── Invoice submit-gating
+  const invoiceTotal = calcTotal(invoiceItems, invoiceDiscount);
+  const noItems = invoiceItems.length === 0;
+  const hasEmptyName = invoiceItems.some((it) => it.name.trim().length === 0);
+  const hasZeroQty = invoiceItems.some((it) => (Number(it.qty) || 0) <= 0);
+  const hasZeroPrice = invoiceItems.some((it) => (Number(it.price) || 0) <= 0);
+  const invoiceValid =
+    !noItems && !hasEmptyName && !hasZeroQty && !hasZeroPrice && invoiceTotal > 0;
+
+  const gateProblems: string[] = [];
+  if (noItems) gateProblems.push("Belum ada item invoice.");
+  if (hasEmptyName) gateProblems.push("Ada item tanpa nama.");
+  if (hasZeroQty) gateProblems.push("Ada item dengan jumlah (qty) 0.");
+  if (hasZeroPrice) gateProblems.push("Ada item dengan harga Rp 0.");
+  if (!noItems && invoiceTotal <= 0) gateProblems.push("Total invoice masih Rp 0.");
+
+  const submitDisabled = isSubmitting || !order || !invoiceValid;
 
   return (
     <section className="space-y-4">
       <Card
-        title="Review & Kirim"
-        subtitle="Periksa kembali sebelum mengirim laporan."
+        title="Review Laporan"
+        subtitle="Periksa kembali sebelum mengirim."
       >
         {order ? (
           <ReviewRow label="Order">
@@ -114,23 +140,8 @@ export default function Step5Review({
                   <span className="text-neutral-700">
                     {r.name} ×{r.qty}
                   </span>
-                  {r.price > 0 ? (
-                    <span className="text-neutral-500 tabular-nums shrink-0">
-                      {fmtRp(r.subtotal)}
-                    </span>
-                  ) : null}
                 </li>
               ))}
-              {workTotal > 0 ? (
-                <li className="flex justify-between border-t border-neutral-100 mt-1 pt-1">
-                  <span className="text-neutral-500 text-[11px]">
-                    Estimasi total (referensi)
-                  </span>
-                  <span className="font-semibold tabular-nums">
-                    {fmtRp(workTotal)}
-                  </span>
-                </li>
-              ) : null}
             </ul>
           )}
         </ReviewRow>
@@ -179,6 +190,28 @@ export default function Step5Review({
         </ReviewRow>
       </Card>
 
+      {/* Editable invoice — gets sent to the customer on submit */}
+      <InvoiceEditorCard
+        items={invoiceItems}
+        setItems={setInvoiceItems}
+        discount={invoiceDiscount}
+        setDiscount={setInvoiceDiscount}
+        services={services}
+        onReset={onResetInvoice}
+      />
+
+      {/* Gating hint */}
+      {!invoiceValid && !isSubmitting ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <p className="font-semibold mb-1">Lengkapi invoice dulu:</p>
+          <ul className="list-disc list-inside space-y-0.5">
+            {gateProblems.map((g, i) => (
+              <li key={i}>{g}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {/* Submit-time error */}
       {isError && submitError ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -211,10 +244,10 @@ export default function Step5Review({
         <button
           type="button"
           onClick={onSubmit}
-          disabled={isSubmitting || !order}
+          disabled={submitDisabled}
           className="flex-[2] min-h-[48px] rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          {isSubmitting ? "Mengirim..." : "✓ Kirim Laporan"}
+          {isSubmitting ? "Mengirim..." : "✓ Kirim Laporan & Buat Invoice"}
         </button>
       </div>
     </section>

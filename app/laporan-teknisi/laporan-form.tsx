@@ -1,10 +1,15 @@
 // app/laporan-teknisi/laporan-form.tsx
 // Client Component. Owns step state, accumulating form state, and the submit
 // chain. Each step is a presentational child that gets props + callbacks.
+//
+// Submit now creates the customer invoice + Xendit payment link in the SAME
+// action as the report (Option B: report submit → invoice + Xendit + customer
+// email, hands-off). The invoice is editable on Step 5 before sending. On the
+// success screen the technician is shown the payment QR to present on-site.
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   BCC_FIXED,
@@ -13,7 +18,6 @@ import {
   type LaporanOrder,
   type LaporanTechnician,
   type UnitCounts,
-  ZERO_UNIT_COUNTS,
   compressImage,
   customerDisplayName,
   deriveUnitCounts,
@@ -23,6 +27,16 @@ import {
   photoFilename,
   uploadPhoto,
 } from "@/lib/laporan";
+import {
+  type LineItem,
+  type ReportLike,
+  type ServiceRow,
+  buildInvoiceNumber,
+  buildLineItemsFromReport,
+  calcSubtotal,
+  calcTotal,
+  fmtRp,
+} from "@/lib/invoices";
 import Step1Order from "./step1-order";
 import Step2Pengerjaan from "./step2-pengerjaan";
 import Step3Kondisi from "./step3-kondisi";
@@ -43,6 +57,8 @@ type SubmitStage =
   | "report"
   | "order"
   | "token"
+  | "xendit"
+  | "invoice"
   | "emails"
   | "done"
   | "error";
@@ -53,13 +69,25 @@ const SUBMIT_STAGE_LABEL: Record<SubmitStage, string> = {
   upload:   "Mengunggah foto...",
   report:   "Menyimpan laporan...",
   order:    "Memperbarui status order...",
-  token:    "Membuat link invoice...",
+  token:    "Membuat token invoice...",
+  xendit:   "Membuat link pembayaran...",
+  invoice:  "Menyimpan invoice...",
   emails:   "Mengirim email...",
   done:     "Selesai",
   error:    "Gagal",
 };
 
 const STEPS = ["Order", "Pengerjaan", "Kondisi", "Foto", "Review"] as const;
+
+// ── Invoice / payment constants (kept in sync with the tech-invoice modal) ──
+const CC_EMAIL = "servisacapartemen@gmail.com";
+const RECEIPT_WA = "+62 856-8310-419";
+const BANK = {
+  name: "BCA (KCU Kebayoran Baru)",
+  account: "0700435393",
+  holder: "Hafiz Fauzan",
+};
+const XENDIT_MIN_AMOUNT = 10000;
 
 export default function LaporanForm({
   initial,
@@ -95,11 +123,24 @@ export default function LaporanForm({
   const [photosBefore, setPhotosBefore] = useState<StagedPhoto[]>([]);
   const [photosAfter, setPhotosAfter] = useState<StagedPhoto[]>([]);
 
+  // ───────────── Step 5 state — editable invoice
+  const [invoiceItems, setInvoiceItems] = useState<LineItem[]>([]);
+  const [invoiceDiscount, setInvoiceDiscount] = useState<number>(0);
+  // Tracks the report signature last used to (re)seed the invoice, so going
+  // back-and-forth between steps doesn't clobber manual edits unless the
+  // underlying work actually changed.
+  const lastSeededSig = useRef<string | null>(null);
+
   // ───────────── Submit/result state
   const [submitStage, setSubmitStage] = useState<SubmitStage>("idle");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitWarnings, setSubmitWarnings] = useState<string[]>([]);
-  const [resultLink, setResultLink] = useState<string | null>(null);
+  const [resultPaymentUrl, setResultPaymentUrl] = useState<string | null>(null);
+  const [resultInvoiceNumber, setResultInvoiceNumber] = useState<string>("");
+  const [resultTotal, setResultTotal] = useState<number>(0);
+  const [resultTokenLink, setResultTokenLink] = useState<string | null>(null);
+  const [resultAutoCreateFailed, setResultAutoCreateFailed] =
+    useState<boolean>(false);
 
   // ───────────── Derived
   const selectedOrder: LaporanOrder | null = useMemo(
@@ -123,7 +164,41 @@ export default function LaporanForm({
     [serviceCounts],
   );
 
-  const isSubmitting = submitStage !== "idle" && submitStage !== "done" && submitStage !== "error";
+  // Report-shaped object for buildLineItemsFromReport (shared with invoicing).
+  const reportLike: ReportLike = useMemo(
+    () => ({
+      unit_split_standar_small: unitCounts.unit_split_standar_small,
+      unit_split_standar_large: unitCounts.unit_split_standar_large,
+      unit_split_semibongkar_small: unitCounts.unit_split_semibongkar_small,
+      unit_split_semibongkar_large: unitCounts.unit_split_semibongkar_large,
+      unit_cassette: unitCounts.unit_cassette,
+      unit_ducting: unitCounts.unit_ducting,
+      perbaikan_dilakukan: selectedPerbaikan,
+      pengerjaan,
+    }),
+    [unitCounts, selectedPerbaikan, pengerjaan],
+  );
+
+  // @/lib/invoices works in ServiceRow[]; LaporanService has no numeric id, so
+  // synthesise one (buildLineItemsFromReport only reads name_id + price).
+  const invoiceServices: ServiceRow[] = useMemo(
+    () =>
+      initial.services.map((s, i) => ({
+        id: i + 1,
+        name_id: s.name_id,
+        price: s.price,
+        category: s.category,
+      })),
+    [initial.services],
+  );
+
+  const reportSignature = useMemo(
+    () => JSON.stringify({ unitCounts, selectedPerbaikan, pengerjaan }),
+    [unitCounts, selectedPerbaikan, pengerjaan],
+  );
+
+  const isSubmitting =
+    submitStage !== "idle" && submitStage !== "done" && submitStage !== "error";
   const isDone = submitStage === "done";
 
   // ───────────── Photo handlers (compress on add)
@@ -168,6 +243,19 @@ export default function LaporanForm({
     });
   }
 
+  // ───────────── Invoice seeding / reset
+  function seedInvoiceFromReport() {
+    setInvoiceItems(buildLineItemsFromReport(reportLike, invoiceServices));
+    lastSeededSig.current = reportSignature;
+  }
+
+  // Card "Reset ke pekerjaan" — re-runs autofill and clears any discount.
+  function resetInvoice() {
+    setInvoiceItems(buildLineItemsFromReport(reportLike, invoiceServices));
+    setInvoiceDiscount(0);
+    lastSeededSig.current = reportSignature;
+  }
+
   // ───────────── Step navigation with per-step validation
 
   function goToStep2() {
@@ -192,7 +280,13 @@ export default function LaporanForm({
   }
 
   function goToStep5() {
-    // Photos are optional per WP — don't block
+    // Photos are optional per WP — don't block.
+    // Seed the invoice from the current work, but only when the underlying
+    // report changed since the last seed (so manual edits survive a quick
+    // hop back to Step 4 and forward again).
+    if (lastSeededSig.current !== reportSignature) {
+      seedInvoiceFromReport();
+    }
     setStep(5);
   }
 
@@ -213,6 +307,13 @@ export default function LaporanForm({
 
     const orderId = selectedOrder.order_id;
     const customer = selectedOrder.customer;
+
+    // Invoice figures (authoritative — from the editable Step 5 card).
+    const invoiceNumber = buildInvoiceNumber(orderId);
+    const subtotal = calcSubtotal(invoiceItems);
+    const total = calcTotal(invoiceItems, invoiceDiscount);
+    const customerName = customerDisplayName(customer);
+    const customerEmail = (customer.email ?? "").trim();
 
     try {
       // 1. Upload photos
@@ -284,38 +385,126 @@ export default function LaporanForm({
       }
 
       // 4. Generate token + INSERT invoice_tokens
+      // The token is the credential the token-gated invoice route needs, and
+      // also the fallback the tech uses to create the invoice manually on the
+      // /tech-invoice page if auto-creation below fails.
       setSubmitStage("token");
       const token = generateInvoiceToken();
       const { error: tokenErr } = await supabase
         .from("invoice_tokens")
         .insert({ token, order_id: orderId });
       if (tokenErr) {
-        // Without a token we can't email the invoice link, but the report
-        // itself is saved. Warn and skip the invoice-link email.
         warnings.push(`Token invoice gagal dibuat: ${tokenErr.message}`);
       }
-
-      const invoiceLink = tokenErr
+      const tokenLink = tokenErr
         ? null
         : `https://kayon.aeac-service.id/tech-invoice/?token=${token}`;
 
-      // 5. Emails — both non-fatal
+      // ── Invoice creation (only possible with a token) ──
+      let invoiceSaved = false;
+      let xenditPaymentUrl: string | null = null;
+
+      if (!tokenErr) {
+        // 5. Xendit invoice (best-effort; falls back to bank transfer).
+        let xenditInvoiceId: string | null = null;
+        let xenditStatus: string | null = null;
+        let paymentMethod = "bank_transfer";
+
+        if (total >= XENDIT_MIN_AMOUNT && customerEmail) {
+          setSubmitStage("xendit");
+          try {
+            const res = await fetch("/api/xendit/create-invoice", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                orderId,
+                invoiceNumber,
+                amount: total,
+                email: customerEmail.split(",")[0]?.trim(),
+                customerName,
+                description: `AEAC Invoice ${invoiceNumber}`,
+                items: invoiceItems.map((i) => ({
+                  name: i.name,
+                  qty: i.qty,
+                  price: i.price,
+                })),
+              }),
+            });
+            const json = await res.json();
+            if (res.ok && json.ok && json.data?.invoice_url) {
+              xenditInvoiceId = json.data.xendit_id ?? null;
+              xenditPaymentUrl = json.data.invoice_url;
+              xenditStatus = "PENDING";
+              paymentMethod = "xendit";
+            } else {
+              warnings.push(
+                "Link pembayaran Xendit gagal dibuat — gunakan transfer bank (info di email).",
+              );
+            }
+          } catch {
+            warnings.push(
+              "Link pembayaran Xendit gagal dibuat — gunakan transfer bank (info di email).",
+            );
+          }
+        }
+
+        // 6. Save invoice via the TOKEN-GATED route (create_invoice_by_token).
+        setSubmitStage("invoice");
+        try {
+          const payload = {
+            invoice_number: invoiceNumber,
+            order_id: orderId,
+            customer_name: customerName,
+            ordered_by_name: customer.name_kanji ?? "",
+            customer_email: customerEmail,
+            apartment: customer.apartment ?? "",
+            unit: customer.unit ?? "",
+            scheduled_date: selectedOrder.scheduled_date ?? "",
+            technicians: selectedTechs,
+            line_items: invoiceItems,
+            subtotal,
+            discount: invoiceDiscount,
+            total_amount: total,
+            status: "pending_payment",
+            payment_method: paymentMethod,
+            xendit_invoice_id: xenditInvoiceId,
+            xendit_payment_url: xenditPaymentUrl,
+            xendit_status: xenditStatus,
+          };
+          const res = await fetch("/api/tech-invoice/create-invoice", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token, payload }),
+          });
+          const json = await res.json();
+          if (!res.ok || !json.ok) {
+            throw new Error(json.error || `HTTP ${res.status}`);
+          }
+          invoiceSaved = true;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          warnings.push(
+            `Invoice gagal dibuat otomatis: ${msg}. Buat manual lewat link di bawah.`,
+          );
+        }
+      }
+
+      // 7. Emails
       setSubmitStage("emails");
 
-      // 5a. Report email → customer + BCC (fixed addrs + all tech emails)
+      // 7a. Report email → customer + BCC (fixed addrs + all tech emails).
       const allBcc = [
         ...BCC_FIXED,
         ...initial.technicians
           .map((t) => t.email)
           .filter((e): e is string => Boolean(e)),
       ];
-
       try {
         const reportPayload = {
           orderId,
           lang: "id",
           customerName: customer.name_roma ?? "",
-          customerEmail: customer.email ?? "",
+          customerEmail,
           apartment: customer.apartment ?? "",
           unit: customer.unit ?? "",
           scheduledDate: selectedOrder.scheduled_date ?? "",
@@ -351,48 +540,58 @@ export default function LaporanForm({
         warnings.push(`Email laporan ke customer gagal: ${msg}`);
       }
 
-      // 5b. Invoice-link email → only techs in selectedTechs[] + CC aeac@maisonmap.com
-      if (invoiceLink) {
-        const techEmails = selectedTechs
+      // 7b. Invoice email → only when the invoice actually saved. Mirrors the
+      // tech-invoice modal payload (endpoint "invoice" via the GAS proxy).
+      if (invoiceSaved) {
+        const bccTechEmails = selectedTechs
           .map((name) => techByName.get(name)?.email)
           .filter((e): e is string => Boolean(e));
-        if (techEmails.length === 0) {
-          warnings.push(
-            "Email invoice-link tidak dikirim: tidak ada alamat email untuk teknisi yang dipilih.",
-          );
-        } else {
-          try {
-            const linkPayload = {
-              orderId,
-              customerName: customer.name_roma ?? "",
-              apartment: customer.apartment ?? "",
-              unit: customer.unit ?? "",
-              scheduledDate: selectedOrder.scheduled_date ?? "",
-              technicians: selectedTechs.join(", "),
-              invoiceLink,
-              techEmails: techEmails.join(","),
-              cc: "aeac@maisonmap.com",
-            };
-            const linkRes = await fetch("/api/email/send-invoice-link", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(linkPayload),
-            });
-            if (!linkRes.ok) {
-              warnings.push(
-                `Email invoice-link ke teknisi gagal (HTTP ${linkRes.status}).`,
-              );
-            }
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            warnings.push(`Email invoice-link ke teknisi gagal: ${msg}`);
+        try {
+          const emailPayload = {
+            endpoint: "invoice",
+            invoiceNumber,
+            orderId,
+            customerName,
+            customerEmail,
+            apartment: customer.apartment ?? "",
+            unit: customer.unit ?? "",
+            scheduledDate: selectedOrder.scheduled_date ?? "",
+            technicians: selectedTechs.join(", "),
+            jamMulai,
+            jamSelesai,
+            subtotal,
+            discount: invoiceDiscount,
+            total,
+            cc: CC_EMAIL,
+            bcc: bccTechEmails.join(","),
+            bankName: BANK.name,
+            bankAccount: BANK.account,
+            bankHolder: BANK.holder,
+            receiptWa: RECEIPT_WA,
+            lineItems: invoiceItems,
+            xenditPaymentUrl: xenditPaymentUrl ?? "",
+          };
+          const res = await fetch("/api/email/send-invoice", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(emailPayload),
+          });
+          if (!res.ok) {
+            warnings.push(`Email invoice ke customer gagal (HTTP ${res.status}).`);
           }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          warnings.push(`Email invoice ke customer gagal: ${msg}`);
         }
       }
 
-      // 6. Done
+      // 8. Done
       setSubmitWarnings(warnings);
-      setResultLink(invoiceLink);
+      setResultPaymentUrl(xenditPaymentUrl);
+      setResultInvoiceNumber(invoiceNumber);
+      setResultTotal(total);
+      setResultTokenLink(tokenLink);
+      setResultAutoCreateFailed(!invoiceSaved);
       setSubmitStage("done");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -420,30 +619,112 @@ export default function LaporanForm({
     setSelectedPerbaikan([]);
     setPhotosBefore([]);
     setPhotosAfter([]);
+    setInvoiceItems([]);
+    setInvoiceDiscount(0);
+    lastSeededSig.current = null;
     setSubmitStage("idle");
     setSubmitError(null);
     setSubmitWarnings([]);
-    setResultLink(null);
+    setResultPaymentUrl(null);
+    setResultInvoiceNumber("");
+    setResultTotal(0);
+    setResultTokenLink(null);
+    setResultAutoCreateFailed(false);
   }
 
   // ───────────── Success screen
   if (isDone) {
+    const paymentOk = Boolean(resultPaymentUrl) && !resultAutoCreateFailed;
     return (
       <main className="max-w-[480px] mx-auto px-3 pb-16 pt-6">
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center">
-          <div className="text-5xl mb-3">✅</div>
+          <div className="text-5xl mb-3">{resultAutoCreateFailed ? "⚠️" : "✅"}</div>
           <h1 className="text-lg font-semibold text-emerald-900 mb-1">
             Laporan Berhasil Dikirim!
           </h1>
           <p className="text-sm text-emerald-800 leading-relaxed">
-            Terima kasih. Laporan telah disimpan dan email telah dikirim
-            ke customer.
+            {resultAutoCreateFailed
+              ? "Laporan tersimpan & email laporan dikirim, tetapi invoice belum otomatis dibuat."
+              : "Laporan & invoice telah dibuat. Email sudah dikirim ke customer."}
           </p>
 
-          {resultLink ? (
-            <p className="text-xs text-emerald-700 mt-3 break-all">
-              Link invoice telah dikirim ke email teknisi.
+          {resultInvoiceNumber ? (
+            <p className="text-xs text-emerald-700 mt-2">
+              <code className="font-mono bg-white/70 px-1.5 py-0.5 rounded">
+                {resultInvoiceNumber}
+              </code>{" "}
+              · {fmtRp(resultTotal)}
             </p>
+          ) : null}
+
+          {/* Payment QR + button — present this to the customer on-site */}
+          {paymentOk && resultPaymentUrl ? (
+            <div className="mt-5 rounded-xl border border-amber-200 bg-white p-4 text-center">
+              <p className="text-[11px] font-semibold text-amber-800 uppercase tracking-wider mb-2">
+                Pembayaran Customer
+              </p>
+              <PaymentQR url={resultPaymentUrl} />
+              <p className="text-[11px] text-neutral-500 mt-2 mb-3">
+                Tunjukkan QR ini ke customer untuk membayar langsung, atau buka
+                halaman pembayaran:
+              </p>
+              <a
+                href={resultPaymentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full min-h-[44px] rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold flex items-center justify-center transition"
+              >
+                💳 Buka Halaman Pembayaran
+              </a>
+            </div>
+          ) : null}
+
+          {/* Bank-transfer fallback — always available */}
+          {!resultAutoCreateFailed ? (
+            <div className="mt-3 rounded-xl border border-neutral-200 bg-white p-3 text-left">
+              <p className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider mb-1">
+                Atau transfer bank
+              </p>
+              <p className="text-xs text-neutral-700">{BANK.name}</p>
+              <p className="text-sm font-mono font-semibold text-neutral-900">
+                {BANK.account}
+              </p>
+              <p className="text-xs text-neutral-600">a.n. {BANK.holder}</p>
+              <p className="text-[11px] text-neutral-500 mt-1">
+                Kirim bukti transfer ke WA {RECEIPT_WA}.
+              </p>
+            </div>
+          ) : null}
+
+          {/* Manual invoice fallback when auto-create failed */}
+          {resultAutoCreateFailed ? (
+            resultTokenLink ? (
+              <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-left">
+                <p className="text-xs font-semibold text-amber-900 mb-1">
+                  Buat invoice manual
+                </p>
+                <p className="text-[11px] text-amber-800 mb-2">
+                  Invoice otomatis gagal. Buka link ini untuk membuat &amp;
+                  mengirim invoice secara manual:
+                </p>
+                <a
+                  href={resultTokenLink}
+                  className="block w-full min-h-[44px] rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold flex items-center justify-center transition"
+                >
+                  🧾 Buka Halaman Buat Invoice
+                </a>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-left">
+                <p className="text-xs font-semibold text-red-900 mb-1">
+                  Invoice perlu dibuat manual
+                </p>
+                <p className="text-[11px] text-red-800">
+                  Token invoice tidak terbentuk. Minta admin/finance membuat
+                  invoice untuk order ini lewat halaman Invoice Admin.
+                </p>
+              </div>
+            )
           ) : null}
 
           {submitWarnings.length > 0 ? (
@@ -553,6 +834,11 @@ export default function LaporanForm({
             selectedPerbaikan={selectedPerbaikan}
             photosBefore={photosBefore}
             photosAfter={photosAfter}
+            invoiceItems={invoiceItems}
+            setInvoiceItems={setInvoiceItems}
+            invoiceDiscount={invoiceDiscount}
+            setInvoiceDiscount={setInvoiceDiscount}
+            onResetInvoice={resetInvoice}
             submitStage={submitStage}
             submitStageLabel={SUBMIT_STAGE_LABEL[submitStage]}
             submitError={submitError}
@@ -562,6 +848,38 @@ export default function LaporanForm({
         ) : null}
       </div>
     </main>
+  );
+}
+
+// ──────────────────────────────────────────
+// Payment QR — uses api.qrserver.com with a graceful text fallback if the
+// image fails to load (offline / blocked). The "Buka Halaman Pembayaran"
+// button below it always works regardless.
+function PaymentQR({ url }: { url: string }) {
+  const [imgError, setImgError] = useState(false);
+  const src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(
+    url,
+  )}`;
+  if (imgError) {
+    return (
+      <div className="mx-auto w-[180px] h-[180px] rounded-lg border border-dashed border-amber-300 bg-amber-50 flex items-center justify-center px-3">
+        <p className="text-[11px] text-amber-800 text-center">
+          QR tidak dapat dimuat. Gunakan tombol &quot;Buka Halaman
+          Pembayaran&quot; di bawah.
+        </p>
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt="QR pembayaran"
+      width={180}
+      height={180}
+      onError={() => setImgError(true)}
+      className="mx-auto w-[180px] h-[180px] rounded-lg border border-neutral-200 bg-white"
+    />
   );
 }
 
