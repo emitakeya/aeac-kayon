@@ -14,11 +14,15 @@ type Tab = "pending" | "invoiced";
 
 export default function InvoiceAdminClient({
   initialData,
+  readOnly = false,
 }: {
   initialData: InvoiceAdminData;
+  readOnly?: boolean;
 }) {
   const [data, setData] = useState<InvoiceAdminData>(initialData);
-  const [tab, setTab] = useState<Tab>("pending");
+  // Read-only users (technicians) start on the invoiced list — the "Perlu
+  // Invoice" tab is a create workflow they can't use.
+  const [tab, setTab] = useState<Tab>(readOnly ? "invoiced" : "pending");
   const [refreshing, setRefreshing] = useState(false);
 
   // The editor view replaces the list view when an order is selected.
@@ -47,6 +51,10 @@ export default function InvoiceAdminClient({
 
   // ──────────────────────────────────────────
   async function handleSelectOrder(orderId: string) {
+    // Read-only users can never open the invoice editor. This is belt-and-
+    // suspenders — the "Perlu Invoice" tab (the only caller) is hidden for
+    // them, and create_invoice rejects technicians at the DB anyway.
+    if (readOnly) return;
     setLoadingOrder(orderId);
     setLoadError(null);
     try {
@@ -107,11 +115,20 @@ export default function InvoiceAdminClient({
         <div className="h-1.5 bg-gradient-to-r from-amber-500 to-amber-600" />
         <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-lg font-semibold text-neutral-900 leading-tight">
-              📄 Invoice Admin — AEAC
-            </h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg font-semibold text-neutral-900 leading-tight">
+                📄 Invoice Admin — AEAC
+              </h1>
+              {readOnly ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200 px-2 py-0.5 text-[11px] font-medium">
+                  👁 Hanya-baca
+                </span>
+              ) : null}
+            </div>
             <p className="text-sm text-neutral-600 mt-1">
-              Kelola dan kirim invoice ke customer berdasarkan laporan teknisi.
+              {readOnly
+                ? "Lihat daftar invoice dan status pembayaran."
+                : "Kelola dan kirim invoice ke customer berdasarkan laporan teknisi."}
             </p>
           </div>
           <button
@@ -133,12 +150,15 @@ export default function InvoiceAdminClient({
 
         {/* Tabs */}
         <div className="border-t border-neutral-200 px-2 pt-2 flex gap-1 -mb-px">
-          <TabButton
-            active={tab === "pending"}
-            onClick={() => setTab("pending")}
-            label="⏳ Perlu Invoice"
-            count={pendingCount}
-          />
+          {/* "Perlu Invoice" is a create workflow — hidden for read-only users */}
+          {!readOnly && (
+            <TabButton
+              active={tab === "pending"}
+              onClick={() => setTab("pending")}
+              label="⏳ Perlu Invoice"
+              count={pendingCount}
+            />
+          )}
           <TabButton
             active={tab === "invoiced"}
             onClick={() => setTab("invoiced")}
@@ -148,8 +168,8 @@ export default function InvoiceAdminClient({
         </div>
       </section>
 
-      {/* Tab content */}
-      {tab === "pending" ? (
+      {/* Tab content. Read-only users only ever see the invoiced list. */}
+      {tab === "pending" && !readOnly ? (
         <PendingList
           orders={data.completed_orders}
           invoices={data.invoices}
@@ -157,7 +177,11 @@ export default function InvoiceAdminClient({
           loadingOrderId={loadingOrder}
         />
       ) : (
-        <InvoicedList invoices={data.invoices} onChange={refreshAll} />
+        <InvoicedList
+          invoices={data.invoices}
+          onChange={refreshAll}
+          readOnly={readOnly}
+        />
       )}
 
       {loadError ? (

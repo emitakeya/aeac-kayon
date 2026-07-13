@@ -86,8 +86,10 @@ export default async function DashboardPage() {
           Halaman Tersedia
         </h3>
         <div className="space-y-2">
-          {/* Booking list — anyone who can view MM bookings */}
-          {me.can_view_mm && (
+          {/* Booking list — MM viewers OR technicians.
+              The RPC (get_bookings_confirmed) and the page gate both already
+              accept can_view_mm OR can_view_tech_pages, so techs land fine. */}
+          {(me.can_view_mm || me.can_view_tech_pages) && (
             <PageLink
               href="/booking-list-confirmed"
               title="Booking List (Confirmed)"
@@ -123,12 +125,19 @@ export default async function DashboardPage() {
             />
           )}
 
-          {/* Invoice Admin — admin + finance */}
-          {(me.can_view_finance || me.can_admin) && (
+          {/* Invoice Admin — admin + finance (full), technician (read-only).
+              Technicians can view invoices but the page renders without any
+              create / mark-paid / resend controls, and the write RPCs reject
+              them at the DB regardless. */}
+          {(me.can_view_finance || me.can_admin || me.role === 'technician') && (
             <PageLink
               href="/invoice-admin"
               title="Invoice Admin"
-              subtitle="Kelola dan kirim invoice ke customer"
+              subtitle={
+                me.can_view_finance || me.can_admin
+                  ? 'Kelola dan kirim invoice ke customer'
+                  : 'Lihat daftar invoice (hanya-baca)'
+              }
             />
           )}
 

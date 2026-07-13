@@ -13,9 +13,11 @@ import MonthAccordion, { type MonthAccordionItem } from "./month-accordion";
 export default function InvoicedList({
   invoices,
   onChange,
+  readOnly = false,
 }: {
   invoices: InvoiceRow[];
   onChange: () => void | Promise<void>;
+  readOnly?: boolean;
 }) {
   if (invoices.length === 0) {
     return (
@@ -55,7 +57,12 @@ export default function InvoicedList({
       children: (
         <>
           {g.invoices.map((inv) => (
-            <InvoicedCard key={inv.id} invoice={inv} onChange={onChange} />
+            <InvoicedCard
+              key={inv.id}
+              invoice={inv}
+              onChange={onChange}
+              readOnly={readOnly}
+            />
           ))}
         </>
       ),
@@ -92,9 +99,11 @@ function StatusPill({ invoice }: { invoice: InvoiceRow }) {
 function InvoicedCard({
   invoice,
   onChange,
+  readOnly = false,
 }: {
   invoice: InvoiceRow;
   onChange: () => void | Promise<void>;
+  readOnly?: boolean;
 }) {
   const [busy, setBusy] = useState<null | "mark-paid" | "resend">(null);
   const isPaid = invoice.status === "paid";
@@ -176,41 +185,47 @@ function InvoicedCard({
         </div>
       </div>
 
-      {/* Action row */}
-      <div className="flex items-center gap-2 pt-2 border-t border-neutral-100 flex-wrap">
-        {invoice.xendit_payment_url ? (
-          <a
-            href={invoice.xendit_payment_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-800 underline-offset-2 hover:underline"
-          >
-            🔗 Link Xendit
-          </a>
-        ) : null}
+      {/* Action row. For read-only users we keep the Xendit link (read) but
+          drop the mark-paid / resend controls. If there's also no Xendit link,
+          the whole row is skipped so we don't render an empty bordered strip. */}
+      {invoice.xendit_payment_url || !readOnly ? (
+        <div className="flex items-center gap-2 pt-2 border-t border-neutral-100 flex-wrap">
+          {invoice.xendit_payment_url ? (
+            <a
+              href={invoice.xendit_payment_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-800 underline-offset-2 hover:underline"
+            >
+              🔗 Link Xendit
+            </a>
+          ) : null}
 
-        <div className="flex-1" />
+          <div className="flex-1" />
 
-        {!isPaid ? (
-          <button
-            type="button"
-            onClick={handleMarkPaid}
-            disabled={busy !== null}
-            className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-1.5 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            {busy === "mark-paid" ? "Memproses..." : "✓ Tandai Lunas"}
-          </button>
-        ) : null}
+          {!readOnly && !isPaid ? (
+            <button
+              type="button"
+              onClick={handleMarkPaid}
+              disabled={busy !== null}
+              className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-1.5 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              {busy === "mark-paid" ? "Memproses..." : "✓ Tandai Lunas"}
+            </button>
+          ) : null}
 
-        <button
-          type="button"
-          onClick={handleResend}
-          disabled={busy !== null}
-          className="inline-flex items-center gap-1 rounded-lg border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold px-2.5 py-1.5 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition"
-        >
-          {busy === "resend" ? "Mengirim..." : "✉ Kirim Ulang"}
-        </button>
-      </div>
+          {!readOnly ? (
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={busy !== null}
+              className="inline-flex items-center gap-1 rounded-lg border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold px-2.5 py-1.5 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              {busy === "resend" ? "Mengirim..." : "✉ Kirim Ulang"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </article>
   );
 }

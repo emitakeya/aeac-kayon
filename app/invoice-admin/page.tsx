@@ -1,7 +1,8 @@
 // app/invoice-admin/page.tsx
 // Server Component. Calls public.get_invoice_admin_data() and renders the
-// /invoice-admin page. Access control (can_view_finance OR can_admin) lives
-// inside the RPC and raises 42501 for users without permission.
+// /invoice-admin page. Read access (finance, admin, OR technician) is enforced
+// inside the RPC, which raises 42501 for anyone else. Technicians render a
+// read-only view (readOnly flag below); write RPCs stay finance/admin-only.
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -21,7 +22,15 @@ export default async function Page() {
 
   const { data: me } = await supabase.from("v_current_user").select("*").maybeSingle();
   if (!me) redirect("/login");
-  if (!me.can_view_finance && !me.can_admin) redirect("/403");
+  // Allow finance, admin, AND technicians. Marketing / TRO / supervisor stay
+  // blocked. (can_view_tech_pages == {admin, finance, technician}.)
+  if (!me.can_view_finance && !me.can_admin && !me.can_view_tech_pages) redirect("/403");
+
+  // Technicians get a READ-ONLY view — no create / mark-paid / resend controls.
+  // Finance + admin keep full write access. This flag only drives the UI; the
+  // write RPCs (create_invoice / mark_invoice_paid) independently gate on
+  // finance/admin, so a technician is blocked at the DB even via a raw request.
+  const readOnly = !(me.can_view_finance || me.can_admin);
 
   // Single RPC call returns all four datasets
   const { data, error } = await supabase.rpc("get_invoice_admin_data");
@@ -49,5 +58,5 @@ export default async function Page() {
     technicians: [],
   }) as InvoiceAdminData;
 
-  return <InvoiceAdminClient initialData={initialData} />;
+  return <InvoiceAdminClient initialData={initialData} readOnly={readOnly} />;
 }
