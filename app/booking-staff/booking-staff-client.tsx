@@ -32,7 +32,11 @@ const STEPS = ["Tanggal", "Layanan", "Kontak", "Review"] as const;
 export default function BookingStaffClient({ context, catalog, apartments, refOrderId }: Props) {
   const prefill = context.prefill;
   const isReminderMode = !!prefill;
-  const self = context.team.find((t) => t.is_self) ?? context.team[0] ?? null;
+  const selfMember = context.team.find((t) => t.is_self) ?? null;
+  const teamCodes = Array.from(
+    new Set(context.team.map((t) => t.team_code).filter(Boolean) as string[])
+  );
+  const groupedIdentity = teamCodes.length > 1; // admin: staff span multiple teams
 
   const [step, setStep] = useState(1);
 
@@ -48,7 +52,7 @@ export default function BookingStaffClient({ context, catalog, apartments, refOr
   const [optByCard, setOptByCard] = useState<Record<string, number>>({});
 
   // Step 3
-  const [orderedByStaffId, setOrderedByStaffId] = useState(self?.staff_id ?? "");
+  const [orderedByStaffId, setOrderedByStaffId] = useState(selfMember?.staff_id ?? "");
   const [apartment, setApartment] = useState(prefill?.apartment ?? "");
   const [unit, setUnit] = useState(prefill?.unit ?? "");
   const [tenantName, setTenantName] = useState(prefill?.tenant_name ?? "");
@@ -64,7 +68,7 @@ export default function BookingStaffClient({ context, catalog, apartments, refOr
 
   const total = useMemo(() => cartTotal(cart), [cart]);
   const sessions = useMemo(() => allowedSessions(isoDate), [isoDate]);
-  const orderedByName = context.team.find((t) => t.staff_id === orderedByStaffId)?.name ?? self?.name ?? "";
+  const orderedByName = context.team.find((t) => t.staff_id === orderedByStaffId)?.name ?? selfMember?.name ?? "";
   const today = todayJakartaISO();
 
   const qtyOf = (key: string) => qtyByCard[key] ?? 1;
@@ -330,17 +334,30 @@ export default function BookingStaffClient({ context, catalog, apartments, refOr
               <div className="b-ident-av">{(orderedByName || "?").charAt(0).toUpperCase()}</div>
               <div style={{ flex: 1 }}>
                 <div className="b-ident-lab">Dipesan oleh</div>
-                <div className="b-ident-hint">▾ Terdeteksi otomatis — klik untuk pesan atas nama rekan tim</div>
+                <div className="b-ident-hint">▾ {selfMember ? "Terdeteksi otomatis — klik untuk pesan atas nama rekan tim" : "Pilih staff pemesan"}</div>
                 <select
                   className="b-select b-ident-dd"
                   value={orderedByStaffId}
                   onChange={(e) => setOrderedByStaffId(e.target.value)}
                 >
-                  {context.team.map((t) => (
-                    <option key={t.staff_id} value={t.staff_id}>
-                      {t.is_self ? `${t.name} — saya sendiri` : `${t.name} (${t.role})`}
-                    </option>
-                  ))}
+                  {!selfMember && <option value="" disabled>— Pilih staff pemesan —</option>}
+                  {groupedIdentity
+                    ? teamCodes.map((code) => (
+                        <optgroup key={code} label={`Tim ${code}`}>
+                          {context.team
+                            .filter((t) => t.team_code === code)
+                            .map((t) => (
+                              <option key={t.staff_id} value={t.staff_id}>
+                                {t.is_self ? `${t.name} — saya` : `${t.name} (${t.role})`}
+                              </option>
+                            ))}
+                        </optgroup>
+                      ))
+                    : context.team.map((t) => (
+                        <option key={t.staff_id} value={t.staff_id}>
+                          {t.is_self ? `${t.name} — saya sendiri` : `${t.name} (${t.role})`}
+                        </option>
+                      ))}
                 </select>
               </div>
             </div>

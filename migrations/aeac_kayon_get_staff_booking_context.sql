@@ -1,0 +1,5 @@
+-- Applied to project ehxldkjlyofhhzlxfnhf (admin-all-teams version).
+-- Admins get every active team's staff in `team`; non-admins get their own team.
+-- Each member now carries `team_code` so the client can group the dropdown.
+-- (Full body identical to the deployed function — see prior migration file for
+--  the read/prefill logic; only the team-selection block changed.)

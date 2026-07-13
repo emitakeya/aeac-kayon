@@ -11,12 +11,19 @@ export type AuthState = {
   variant?: 'success' | 'error';
 };
 
+// Only allow same-origin internal paths (e.g. "/booking-staff?ref=..."), never
+// an absolute URL or protocol-relative "//host". Falls back to /dashboard.
+function safeNext(raw: string): string {
+  return raw.startsWith('/') && !raw.startsWith('//') ? raw : '/dashboard';
+}
+
 export async function signInWithPassword(
   _prev: AuthState,
   formData: FormData,
 ): Promise<AuthState> {
   const email = String(formData.get('email') ?? '').trim().toLowerCase();
   const password = String(formData.get('password') ?? '');
+  const next = safeNext(String(formData.get('next') ?? ''));
 
   if (!email || !password) {
     return { ok: false, message: 'Email dan password wajib diisi.', variant: 'error' };
@@ -30,7 +37,7 @@ export async function signInWithPassword(
   }
 
   revalidatePath('/', 'layout');
-  redirect('/dashboard');
+  redirect(next);
 }
 
 export async function signInWithMagicLink(
@@ -38,6 +45,7 @@ export async function signInWithMagicLink(
   formData: FormData,
 ): Promise<AuthState> {
   const email = String(formData.get('email') ?? '').trim().toLowerCase();
+  const next = safeNext(String(formData.get('next') ?? ''));
 
   if (!email) {
     return { ok: false, message: 'Email wajib diisi.', variant: 'error' };
@@ -49,10 +57,15 @@ export async function signInWithMagicLink(
     headersList.get('origin') ??
     `https://${headersList.get('host') ?? 'localhost:3000'}`;
 
+  const callback =
+    next === '/dashboard'
+      ? `${origin}/auth/callback`
+      : `${origin}/auth/callback?next=${encodeURIComponent(next)}`;
+
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: `${origin}/auth/callback`,
+      emailRedirectTo: callback,
       shouldCreateUser: false,
     },
   });

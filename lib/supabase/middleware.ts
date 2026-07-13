@@ -46,14 +46,23 @@ export async function updateSession(request: NextRequest) {
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
-    url.searchParams.set('next', pathname);
+    // Preserve the full destination (path + query, e.g. /booking-staff?ref=...)
+    // so the user returns exactly where they were headed after logging in.
+    url.searchParams.set('next', pathname + request.nextUrl.search);
     return NextResponse.redirect(url);
   }
 
   if (user && pathname.startsWith('/login')) {
     const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
-    url.searchParams.delete('next');
+    // Honor an internal ?next= if present, otherwise land on the dashboard.
+    const nextParam = request.nextUrl.searchParams.get('next');
+    const dest = nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//')
+      ? nextParam
+      : '/dashboard';
+    url.search = '';
+    url.pathname = dest.split('?')[0];
+    const qs = dest.includes('?') ? dest.slice(dest.indexOf('?') + 1) : '';
+    if (qs) url.search = '?' + qs;
     return NextResponse.redirect(url);
   }
 

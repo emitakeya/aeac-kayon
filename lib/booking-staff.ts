@@ -17,6 +17,7 @@ export type TeamMember = {
   staff_id: string;
   role: "marketing" | "tro";
   name: string;
+  team_code?: string | null;
   is_self: boolean;
 };
 

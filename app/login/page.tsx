@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import {
   signInWithPassword,
   signInWithMagicLink,
@@ -11,6 +11,14 @@ const initialState: AuthState = { ok: false };
 
 export default function LoginPage() {
   const [mode, setMode] = useState<'password' | 'magic'>('password');
+
+  // Preserve where the user was headed (e.g. /booking-staff?ref=...) so login
+  // returns them there. Read from window to avoid a useSearchParams Suspense wrap.
+  const [next, setNext] = useState('');
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get('next');
+    if (p && p.startsWith('/') && !p.startsWith('//')) setNext(p);
+  }, []);
 
   const [pwState, pwAction, pwPending] = useActionState(
     signInWithPassword,
@@ -64,12 +72,14 @@ export default function LoginPage() {
           <div className="p-5">
             {mode === 'password' ? (
               <form action={pwAction} className="space-y-3">
+                <input type="hidden" name="next" value={next} />
                 <Field label="Email" name="email" type="email" autoComplete="email" required />
                 <Field label="Password" name="password" type="password" autoComplete="current-password" required />
                 <SubmitButton pending={pending}>Masuk</SubmitButton>
               </form>
             ) : (
               <form action={mlAction} className="space-y-3">
+                <input type="hidden" name="next" value={next} />
                 <Field label="Email" name="email" type="email" autoComplete="email" required />
                 <p className="text-xs text-neutral-500 leading-relaxed">
                   Kami akan mengirim link login ke email Anda. Klik link itu untuk masuk tanpa password.
