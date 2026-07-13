@@ -5,7 +5,7 @@
 // Reminder mode (prefill present): apartment/unit locked, fields + cart seeded.
 // Fresh mode: apartment picker, unit input, empty cart.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   type BookingContext,
   type CatalogSection,
@@ -43,6 +43,8 @@ export default function BookingStaffClient({ context, catalog, apartments, refOr
   // Step 1
   const [isoDate, setIsoDate] = useState("");
   const [session, setSession] = useState<"AM" | "PM" | "">("");
+  const [load, setLoad] = useState<{ am: number; pm: number; max: number } | null>(null);
+  const [loadingLoad, setLoadingLoad] = useState(false);
 
   // Step 2
   const [cart, setCart] = useState<CartItem[]>(
@@ -70,6 +72,36 @@ export default function BookingStaffClient({ context, catalog, apartments, refOr
   const sessions = useMemo(() => allowedSessions(isoDate), [isoDate]);
   const orderedByName = context.team.find((t) => t.staff_id === orderedByStaffId)?.name ?? selfMember?.name ?? "";
   const today = todayJakartaISO();
+
+  // Fetch session capacity when the date changes (fail-open on error).
+  useEffect(() => {
+    if (!isoDate || sessions.length === 0) {
+      setLoad(null);
+      return;
+    }
+    let cancelled = false;
+    setLoadingLoad(true);
+    fetch(`/api/booking-staff/availability?date=${encodeURIComponent(isoDate)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        if (d && d.ok) setLoad({ am: d.am_count, pm: d.pm_count, max: d.max });
+        else setLoad(null);
+      })
+      .catch(() => { if (!cancelled) setLoad(null); })
+      .finally(() => { if (!cancelled) setLoadingLoad(false); });
+    return () => { cancelled = true; };
+  }, [isoDate, sessions.length]);
+
+  const amFull = !!load && load.am >= load.max;
+  const pmFull = !!load && load.pm >= load.max;
+  const isFull = (s: "AM" | "PM") => (s === "AM" ? amFull : pmFull);
+
+  // Deselect a session that turns out to be full once counts load.
+  useEffect(() => {
+    if (session && isFull(session as "AM" | "PM")) setSession("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [amFull, pmFull]);
 
   const qtyOf = (key: string) => qtyByCard[key] ?? 1;
   const setQty = (key: string, v: number) =>
@@ -103,7 +135,7 @@ export default function BookingStaffClient({ context, catalog, apartments, refOr
   }
 
   // ── validation ──
-  const step1Ok = !!isoDate && !!session && sessions.includes(session as "AM" | "PM");
+  const step1Ok = !!isoDate && !!session && sessions.includes(session as "AM" | "PM") && !isFull(session as "AM" | "PM");
   const step2Ok = cart.length > 0;
   const step3Ok = !!orderedByStaffId && !!apartment.trim() && !!unit.trim() && !!tenantName.trim();
 
@@ -212,18 +244,25 @@ export default function BookingStaffClient({ context, catalog, apartments, refOr
               <div className="b-field">
                 <label className="b-label">Sesi</label>
                 <div className="b-ampm">
-                  {(["AM", "PM"] as const).map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      className={session === s ? "active" : ""}
-                      disabled={!sessions.includes(s)}
-                      onClick={() => setSession(s)}
-                    >
-                      {s}
-                    </button>
-                  ))}
+                  {(["AM", "PM"] as const).map((s) => {
+                    const full = isFull(s);
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        className={session === s ? "active" : ""}
+                        disabled={!sessions.includes(s) || full || loadingLoad}
+                        onClick={() => setSession(s)}
+                      >
+                        {s}{full ? " · Penuh" : ""}
+                      </button>
+                    );
+                  })}
                 </div>
+                {loadingLoad && <div className="b-cap-hint">Mengecek ketersediaan…</div>}
+                {!loadingLoad && amFull && pmFull && (
+                  <div className="b-warn" style={{ marginTop: 8 }}>Kedua sesi sudah penuh di tanggal ini. Silakan pilih tanggal lain.</div>
+                )}
               </div>
             )}
             <div className="b-btn-row">
@@ -539,6 +578,7 @@ function BookingStyles() {
       .bsw .b-ampm button { padding:11px 22px; border:1.5px solid var(--border); border-radius:10px; background:#fff; color:var(--muted); font-size:14px; font-family:inherit; cursor:pointer; }
       .bsw .b-ampm button.active { border-color:var(--accent); background:var(--accent); color:#fff; }
       .bsw .b-ampm button:disabled { opacity:.4; cursor:not-allowed; }
+      .bsw .b-cap-hint { font-size:12px; color:var(--muted); margin-top:8px; }
       .bsw .b-warn { background:#fffbeb; border:1px solid #fde68a; color:#78350f; border-radius:10px; padding:10px 12px; font-size:13px; margin-bottom:12px; }
 
       .bsw .b-svc-section { font-size:11px; font-weight:600; color:var(--muted); letter-spacing:.6px; text-transform:uppercase; margin:16px 0 10px; padding-top:12px; border-top:1px solid var(--border); }
