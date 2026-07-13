@@ -86,6 +86,16 @@ export default async function DashboardPage() {
           Halaman Tersedia
         </h3>
         <div className="space-y-2">
+          {/* Booking / Order Baru — MM staff + admin. Full staff ordering form;
+              also the target of the 3-month reminder deep links (?ref=<order>). */}
+          {(me.can_view_mm || me.can_admin) && (
+            <PageLink
+              href="/booking-staff"
+              title="Booking / Order Baru"
+              subtitle="Buat pesanan baru atas nama tim (tanpa OTP)"
+            />
+          )}
+
           {/* Booking list — MM viewers OR technicians.
               The RPC (get_bookings_confirmed) and the page gate both already
               accept can_view_mm OR can_view_tech_pages, so techs land fine. */}
