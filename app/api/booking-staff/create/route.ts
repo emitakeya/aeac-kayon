@@ -4,15 +4,26 @@
 // 1. Re-checks auth + role (fail fast; the RPC also gates).
 // 2. Calls public.create_staff_order() — writes customer + order atomically,
 //    generates order_id server-side, enforces self/teammate attribution.
-// 3. Fires the GAS booking confirmation email (server-to-server, form-urlencoded,
-//    no `endpoint` param → GAS booking branch). Tenant + ordering staff + techs.
+// 3. Fires the GAS booking confirmation email (server-to-server, JSON,
+//    no `endpoint` key → GAS booking branch). TO list is built by GAS:
+//    tenant email + ordering staff email + all technicians.
 //    Best-effort: the order is already saved, so an email failure is logged but
 //    still returns success.
+//
+// ⚠️ GAS payload MUST be JSON, not form-urlencoded. The WP relay
+// (aeac_send_confirmation) learned this the hard way: form-urlencoded bodies
+// do not survive the GAS 302 redirect, so the booking branch received empty
+// params and no email went out. JSON is the proven format — it's what the WP
+// booking relay and Kayon's send-report / send-invoice routes all use, and
+// the live GAS parseRequest_() merges JSON bodies (arrays → paramsMulti).
 
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { CurrentUser } from "@/lib/types";
 import { GAS_URL, type CreateBookingBody, type CreateBookingResponse } from "@/lib/booking-staff";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function err(message: string, status = 400): NextResponse<CreateBookingResponse> {
   return NextResponse.json<CreateBookingResponse>({ ok: false, error: message }, { status });
@@ -81,37 +92,43 @@ export async function POST(req: Request): Promise<NextResponse<CreateBookingResp
 
   const p = payload as OrderPayload;
 
-  // ── GAS booking email (best-effort) ──
+  // ── GAS booking email (best-effort, JSON) ──
   try {
-    const params = new URLSearchParams();
-    // NOTE: no `endpoint` param → GAS routes this to the booking branch.
-    params.append("orderId", p.order_id);
-    params.append("date", p.scheduled_date ?? "");
-    params.append("nameRoma", p.tenant_name ?? "");
-    params.append("nameKanji", "");
-    params.append("orderedBy", p.ordered_by_name ?? "");
-    params.append("orderedByEmail", p.ordered_by_email ?? "");
-    params.append("mobile", p.standby_phone ?? "");
-    params.append("email", p.tenant_email ?? "");
-    params.append("apartment", p.apartment ?? "");
-    params.append("unit", p.unit ?? "");
-    params.append("message", p.notes ?? "");
-    params.append("waitName", p.standby_name ?? "");
-    params.append("waitMobile", p.standby_phone ?? "");
-    params.append("totalEstimate", body.total_estimate != null ? String(body.total_estimate) : "");
-    for (const s of p.services ?? []) params.append("services", s);
+    // NOTE: no `endpoint` key → GAS routes this to the booking branch.
+    // Key names are the GAS booking branch's camelCase contract
+    // (orderId, nameRoma, orderedByEmail, ... services[]).
+    const gasBody = {
+      orderId: p.order_id,
+      date: p.scheduled_date ?? "",
+      nameRoma: p.tenant_name ?? "",
+      nameKanji: "",
+      orderedBy: p.ordered_by_name ?? "",
+      orderedByEmail: p.ordered_by_email ?? "",
+      mobile: p.standby_phone ?? "",
+      email: p.tenant_email ?? "",
+      apartment: p.apartment ?? "",
+      unit: p.unit ?? "",
+      message: p.notes ?? "",
+      waitName: p.standby_name ?? "",
+      waitMobile: p.standby_phone ?? "",
+      totalEstimate: body.total_estimate != null ? String(body.total_estimate) : "",
+      services: p.services ?? [],
+    };
 
     const gasRes = await fetch(GAS_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-      body: params.toString(),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(gasBody),
+      redirect: "follow",
+      // GAS can be slow — generous timeout (same as send-report route)
+      signal: AbortSignal.timeout(45_000),
     });
+
+    const text = await gasRes.text().catch(() => "");
     if (!gasRes.ok) {
-      console.warn(
-        "[booking-staff] GAS email non-OK",
-        gasRes.status,
-        await gasRes.text().catch(() => "(no body)")
-      );
+      console.warn("[booking-staff] GAS email non-OK", gasRes.status, text.slice(0, 500));
+    } else {
+      console.log("[booking-staff] GAS email response:", text.slice(0, 300));
     }
   } catch (emailErr) {
     console.warn("[booking-staff] GAS email failed:", emailErr);
