@@ -137,7 +137,8 @@ export default function BookingStaffClient({ context, catalog, apartments, refOr
   // ── validation ──
   const step1Ok = !!isoDate && !!session && sessions.includes(session as "AM" | "PM") && !isFull(session as "AM" | "PM");
   const step2Ok = cart.length > 0;
-  const step3Ok = !!orderedByStaffId && !!apartment.trim() && !!unit.trim() && !!tenantName.trim();
+  const step3Ok =
+    !!orderedByStaffId && !!apartment.trim() && !!unit.trim() && !!tenantName.trim() && !!standbyName.trim();
 
   async function submit() {
     setSubmitting(true);
@@ -453,7 +454,7 @@ export default function BookingStaffClient({ context, catalog, apartments, refOr
             </div>
             <div className="b-row">
               <div>
-                <label className="b-label">Nama Standby <span className="b-opt">(opsional)</span></label>
+                <label className="b-label">Nama Standby</label>
                 <input className="b-input" value={standbyName} placeholder="Nama di lokasi" onChange={(e) => setStandbyName(e.target.value)} />
               </div>
               <div>
