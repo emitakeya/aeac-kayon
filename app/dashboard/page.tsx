@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import type { CurrentUser } from '@/lib/types';
 import { LogoutButton } from './logout-button';
+import { OrderFormLottie } from './order-form-lottie';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +42,9 @@ export default async function DashboardPage() {
       />
     );
   }
+
+  // Admin, supervisor, finance, technician. Marketing and TRO excluded.
+  const canViewHistory = me.can_admin || me.can_view_finance || me.can_view_tech_pages;
 
   return (
     <main className="min-h-screen px-4 py-6 max-w-2xl mx-auto">
@@ -86,17 +90,21 @@ export default async function DashboardPage() {
           Halaman Tersedia
         </h3>
         <div className="space-y-2">
-          {/* Booking / Order Baru — MM staff + admin. Full staff ordering form;
-              also the target of the 3-month reminder deep links (?ref=<order>). */}
+          {/* 1. Booking / Order Baru — MM staff + admin/supervisor.
+              NOT technicians: create_staff_order requires the order to be
+              attributed to a marketing/TRO teammate, which a technician has no
+              valid value for. Also the target of the 3-month reminder deep
+              links (?ref=<order>). */}
           {(me.can_view_mm || me.can_admin) && (
             <PageLink
               href="/booking-staff"
               title="Booking / Order Baru"
               subtitle="Buat pesanan baru atas nama tim (tanpa OTP)"
+              icon={<OrderFormLottie />}
             />
           )}
 
-          {/* Booking list — MM viewers OR technicians.
+          {/* 2. Booking list — MM viewers OR technicians.
               The RPC (get_bookings_confirmed) and the page gate both already
               accept can_view_mm OR can_view_tech_pages, so techs land fine. */}
           {(me.can_view_mm || me.can_view_tech_pages) && (
@@ -107,8 +115,27 @@ export default async function DashboardPage() {
             />
           )}
 
-          {/* Laporan Teknisi — techs + admin (admin/finance for testing).
-              The RPC enforces the real check (can_view_tech_pages OR can_admin). */}
+          {/* 3. Cancel — admin + supervisor + finance. Never technicians. */}
+          {(me.can_view_finance || me.can_admin) && (
+            <PageLink
+              href="/cancel"
+              title="Cancel"
+              subtitle="Batalkan pesanan yang masih pending atau confirmed"
+            />
+          )}
+
+          {/* 4. Lihat Semua Pesanan — full archive incl. cancellations.
+              admin + supervisor + finance + technician. */}
+          {canViewHistory && (
+            <PageLink
+              href="/lihat-semua-pesanan"
+              title="Lihat Semua Pesanan"
+              subtitle="Riwayat lengkap semua pesanan, termasuk yang dibatalkan"
+            />
+          )}
+
+          {/* 5. Laporan Teknisi — techs + admin/supervisor (admin/finance for
+              testing). The RPC enforces the real check. */}
           {(me.can_view_tech_pages || me.can_admin) && (
             <PageLink
               href="/laporan-teknisi"
@@ -117,28 +144,10 @@ export default async function DashboardPage() {
             />
           )}
 
-          {/* Rekap Komisi Teknisi — techs see their own; admin/finance see all */}
-          {me.can_view_tech_pages && (
-            <PageLink
-              href="/komisi-teknisi"
-              title="Rekap Komisi Teknisi"
-              subtitle="Lihat komisi per teknisi & per kuartal"
-            />
-          )}
-
-          {/* Rekap Komisi Marketing — admin + finance */}
-          {(me.can_view_finance || me.can_admin) && (
-            <PageLink
-              href="/komisi-marketing"
-              title="Rekap Komisi Marketing"
-              subtitle="Lihat komisi per pasangan marketing"
-            />
-          )}
-
-          {/* Invoice Admin — admin + finance (full), technician (read-only).
-              Technicians can view invoices but the page renders without any
-              create / mark-paid / resend controls, and the write RPCs reject
-              them at the DB regardless. */}
+          {/* 6. Invoice Admin — admin/supervisor + finance (full),
+              technician (read-only). Technicians can view invoices but the page
+              renders without any create / mark-paid / resend controls, and the
+              write RPCs reject them at the DB regardless. */}
           {(me.can_view_finance || me.can_admin || me.role === 'technician') && (
             <PageLink
               href="/invoice-admin"
@@ -151,16 +160,29 @@ export default async function DashboardPage() {
             />
           )}
 
-          {/* Cancel — admin + finance only.
-              Shipped May 14, 2026 — replaces the "Booking List & Cancel"
-              placeholder card. */}
-          {(me.can_view_finance || me.can_admin) && (
+          {/* 7. Rekap Komisi Teknisi — techs see their own;
+              admin/supervisor/finance see all. */}
+          {me.can_view_tech_pages && (
             <PageLink
-              href="/cancel"
-              title="Cancel"
-              subtitle="Batalkan pesanan yang masih pending atau confirmed"
+              href="/komisi-teknisi"
+              title="Rekap Komisi Teknisi"
+              subtitle="Lihat komisi per teknisi & per kuartal"
             />
           )}
+
+          {/* 8. Rekap Komisi Marketing — every role.
+              get_marketing_commission_recap scopes marketing/TRO callers to
+              their own team_code; admin, supervisor, finance and technician see
+              all five teams. */}
+          <PageLink
+            href="/komisi-marketing"
+            title="Rekap Komisi Marketing"
+            subtitle={
+              me.role === 'marketing' || me.role === 'tro'
+                ? 'Lihat komisi tim Anda'
+                : 'Lihat komisi per pasangan marketing'
+            }
+          />
         </div>
       </section>
 
@@ -201,25 +223,34 @@ function PageLink({
   title,
   subtitle,
   disabled,
+  icon,
 }: {
   href?: string;
   title: string;
   subtitle: string;
   disabled?: boolean;
+  icon?: React.ReactNode;
 }) {
   const base = 'block bg-white border border-neutral-200 rounded-xl px-4 py-3 transition';
-  if (disabled || !href) {
-    return (
-      <div className={`${base} opacity-60 cursor-not-allowed`}>
-        <div className="text-sm font-medium text-neutral-700">{title}</div>
+
+  const body = (
+    <div className={icon ? 'flex items-center gap-3' : undefined}>
+      {icon}
+      <div>
+        <div className={`text-sm font-medium ${disabled ? 'text-neutral-700' : 'text-neutral-900'}`}>
+          {title}
+        </div>
         <div className="text-[11px] text-neutral-500 mt-0.5">{subtitle}</div>
       </div>
-    );
+    </div>
+  );
+
+  if (disabled || !href) {
+    return <div className={`${base} opacity-60 cursor-not-allowed`}>{body}</div>;
   }
   return (
     <Link href={href} className={`${base} hover:bg-amber-50 hover:border-amber-200`}>
-      <div className="text-sm font-medium text-neutral-900">{title}</div>
-      <div className="text-[11px] text-neutral-500 mt-0.5">{subtitle}</div>
+      {body}
     </Link>
   );
 }
