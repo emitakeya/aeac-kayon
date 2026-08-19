@@ -160,6 +160,18 @@ export default async function DashboardPage() {
             />
           )}
 
+          {/* 6b. Riwayat Customer — admin + finance only. Service history +
+              invoice recap per customer, downloadable as customer-facing PDF.
+              RPCs (search_customers_for_history / get_customer_history)
+              enforce the same gate at the DB. */}
+          {(me.can_view_finance || me.can_admin) && (
+            <PageLink
+              href="/riwayat-customer"
+              title="Riwayat Customer"
+              subtitle="Laporan servis & invoice per customer — unduh PDF"
+            />
+          )}
+
           {/* 7. Rekap Komisi Teknisi — techs see their own;
               admin/supervisor/finance see all. */}
           {me.can_view_tech_pages && (
