@@ -46,17 +46,20 @@ const s = StyleSheet.create({
     color: INK,
     fontFamily: 'Archivo',
     fontSize: 10,
-    paddingBottom: 64,
+    paddingTop: 30,
+    paddingHorizontal: 40,
+    paddingBottom: 78,
   },
 
   // Header bands
   band: {
     backgroundColor: MUSTARD,
-    borderBottomWidth: 2.5,
-    borderBottomColor: INK,
-    paddingHorizontal: 40,
-    paddingTop: 24,
-    paddingBottom: 18,
+    borderWidth: 2,
+    borderColor: INK,
+    paddingHorizontal: 22,
+    paddingTop: 18,
+    paddingBottom: 14,
+    marginBottom: 22,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
@@ -72,10 +75,11 @@ const s = StyleSheet.create({
 
   visitBand: {
     backgroundColor: MUSTARD,
-    borderBottomWidth: 2.5,
-    borderBottomColor: INK,
-    paddingHorizontal: 40,
-    paddingVertical: 14,
+    borderWidth: 2,
+    borderColor: INK,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    marginBottom: 18,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline',
@@ -83,7 +87,7 @@ const s = StyleSheet.create({
   visitDate: { fontFamily: 'Anton', fontSize: 17 },
   visitMeta: { fontFamily: 'MartianMono', fontSize: 8 },
 
-  body: { paddingHorizontal: 40, paddingTop: 22 },
+  body: {},
 
   // Customer block (summary page)
   custRow: {
@@ -207,14 +211,13 @@ const s = StyleSheet.create({
   // Footer
   footer: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+    left: 40,
+    right: 40,
+    bottom: 28,
     borderTopWidth: 1.5,
     borderTopColor: INK,
     backgroundColor: PAPER,
-    paddingHorizontal: 40,
-    paddingVertical: 9,
+    paddingTop: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
