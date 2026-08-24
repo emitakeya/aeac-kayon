@@ -286,76 +286,90 @@ export function groupOrdersByMonth(orders: CompletedOrder[]): OrderMonthGroup[] 
 }
 
 // ──────────────────────────────────────────
-// Build initial line items from an order's report.
-// Mirrors the WP buildLineItems() exactly — including the Full Bongkar gap
-// (the WP map has no unit field for it, so finance adds it manually).
+// Bank-linked payment marking.
+// Mirrors public.get_invoice_bank_candidates() and
+// public.mark_invoice_paid_with_bank().
 //
-// Order of preference for resolving each item's price:
-//   1. Match by service name in `services` table (name_id)
-//   2. Fallback: 0 (finance can edit)
+// An invoice can only be marked paid by linking it to a row in the Maison Map
+// MMP bank book. Candidates are Sales AEAC credits on or after the work date,
+// with Xendit settlements excluded (they are batched and net of fees, so they
+// never equal a single invoice).
 // ──────────────────────────────────────────
 
-const UNIT_SERVICE_MAP: Record<string, string | null> = {
-  unit_split_standar_small:     "AC Split Cuci Standar (0.5–1 PK)",
-  unit_split_standar_large:     "AC Split Cuci Standar (1.5–2 PK)",
-  unit_split_semibongkar_small: "AC Split Semi Bongkar (0.5–1 PK)",
-  unit_split_semibongkar_large: "AC Split Semi Bongkar (1.5–2 PK)",
-  unit_cassette:                "AC Cassette",
-  unit_ducting:                 "AC Ducting",
-  unit_perbaikan:               null, // perbaikan handled via perbaikan_dilakukan array
+export type BankCandidate = {
+  bank_row_id: number;
+  bank_source: "MMP";
+  bank_code: string;
+  tanggal: string;            // "YYYY-MM-DD"
+  amount_in: number;
+  transaction_desc: string | null;
+  exact_match: boolean;
+  days_after_work: number;
+  already_linked: number;
 };
 
-export type ReportLike = {
-  unit_split_standar_small?: number | null;
-  unit_split_standar_large?: number | null;
-  unit_split_semibongkar_small?: number | null;
-  unit_split_semibongkar_large?: number | null;
-  unit_cassette?: number | null;
-  unit_ducting?: number | null;
-  perbaikan_dilakukan?: string[] | null;
-  pengerjaan?: string[] | null;
-} & Record<string, unknown>;
+export type BankCandidatesPayload = {
+  invoice: {
+    id: number;
+    invoice_number: string;
+    order_id: string;
+    customer_name: string | null;
+    total_amount: number;
+    status: string;
+    technicians: string[];
+    work_date: string | null;
+  };
+  candidates: BankCandidate[];
+};
 
-export function buildLineItemsFromReport(
-  report: ReportLike | null,
-  services: ServiceRow[],
-): LineItem[] {
-  if (!report) return [];
+export type MarkPaidResult = {
+  ok: boolean;
+  already_paid?: boolean;
+  invoice_id?: number;
+  order_id?: string;
+  paid_date?: string;
+  bank?: {
+    bank_row_id: number;
+    bank_code: string;
+    tanggal: string;
+    amount_in: number;
+    transaction_desc: string | null;
+  };
+  commission_result?: {
+    success?: boolean;
+    tech_commissions_created?: number;
+    tech_skipped?: string[];
+    tech_eligible?: boolean;
+    marketing_result?: {
+      created?: boolean;
+      team_code?: string | null;
+      amount?: number;
+      message?: string;
+    };
+    error?: string;
+    note?: string;
+  };
+};
 
-  const priceByName = new Map<string, number>();
-  for (const s of services) {
-    priceByName.set(s.name_id, s.price);
-  }
+// "2026-08-14" → "14 Agu 2026". Short form for the candidate list.
+const BULAN_ID_SHORT = [
+  "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+  "Jul", "Agu", "Sep", "Okt", "Nov", "Des",
+];
 
-  const items: LineItem[] = [];
-  const added = new Set<string>();
+export function fmtTanggalShort(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return iso;
+  const day = Number(m[3]);
+  const monthIdx = Number(m[2]) - 1;
+  return `${day} ${BULAN_ID_SHORT[monthIdx] ?? m[2]} ${m[1]}`;
+}
 
-  // 1. Unit count fields → "AC Split Cuci Standar (X PK)" etc.
-  for (const [key, svcName] of Object.entries(UNIT_SERVICE_MAP)) {
-    if (!svcName) continue;
-    const qty = Number((report as Record<string, unknown>)[key]) || 0;
-    if (qty <= 0) continue;
-    const price = priceByName.get(svcName) ?? 0;
-    items.push({ name: svcName, qty, price, amount: qty * price });
-    added.add(svcName);
-  }
-
-  // 2. perbaikan_dilakukan — repair items selected during the job.
-  for (const p of report.perbaikan_dilakukan ?? []) {
-    if (added.has(p)) continue;
-    const price = priceByName.get(p) ?? 0;
-    items.push({ name: p, qty: 1, price, amount: price });
-    added.add(p);
-  }
-
-  // 3. pengerjaan — additional services performed (only included if priced)
-  for (const p of report.pengerjaan ?? []) {
-    if (added.has(p)) continue;
-    const price = priceByName.get(p);
-    if (price === undefined) continue;
-    items.push({ name: p, qty: 1, price, amount: price });
-    added.add(p);
-  }
-
-  return items;
+// "23 hari" / "hari yang sama" — gap between work date and the bank credit.
+export function fmtJarakHari(days: number | null | undefined): string {
+  const d = Number(days);
+  if (!Number.isFinite(d)) return "";
+  if (d <= 0) return "hari yang sama";
+  return `${d} hari`;
 }

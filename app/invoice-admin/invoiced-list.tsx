@@ -9,16 +9,18 @@ import {
   currentMonthKey,
 } from "@/lib/invoices";
 import MonthAccordion, { type MonthAccordionItem } from "./month-accordion";
+import MarkPaidModal from "./mark-paid-modal";
 
 export default function InvoicedList({
   invoices,
   onChange,
-  readOnly = false,
 }: {
   invoices: InvoiceRow[];
   onChange: () => void | Promise<void>;
-  readOnly?: boolean;
 }) {
+  // Lifted to the list so only one modal exists at a time.
+  const [markPaidFor, setMarkPaidFor] = useState<InvoiceRow | null>(null);
+
   if (invoices.length === 0) {
     return (
       <section className="rounded-xl border border-neutral-200 bg-white p-8 text-center">
@@ -60,8 +62,7 @@ export default function InvoicedList({
             <InvoicedCard
               key={inv.id}
               invoice={inv}
-              onChange={onChange}
-              readOnly={readOnly}
+              onMarkPaid={() => setMarkPaidFor(inv)}
             />
           ))}
         </>
@@ -69,7 +70,19 @@ export default function InvoicedList({
     };
   });
 
-  return <MonthAccordion items={items} defaultOpenKey={defaultOpenKey} />;
+  return (
+    <>
+      <MonthAccordion items={items} defaultOpenKey={defaultOpenKey} />
+
+      {markPaidFor ? (
+        <MarkPaidModal
+          invoice={markPaidFor}
+          onClose={() => setMarkPaidFor(null)}
+          onDone={onChange}
+        />
+      ) : null}
+    </>
+  );
 }
 
 // ──────────────────────────────────────────
@@ -98,59 +111,13 @@ function StatusPill({ invoice }: { invoice: InvoiceRow }) {
 // ──────────────────────────────────────────
 function InvoicedCard({
   invoice,
-  onChange,
-  readOnly = false,
+  onMarkPaid,
 }: {
   invoice: InvoiceRow;
-  onChange: () => void | Promise<void>;
-  readOnly?: boolean;
+  onMarkPaid: () => void;
 }) {
-  const [busy, setBusy] = useState<null | "mark-paid" | "resend">(null);
+  const [busy, setBusy] = useState<null | "resend">(null);
   const isPaid = invoice.status === "paid";
-
-  async function handleMarkPaid() {
-    if (isPaid) return;
-    const sure = confirm(
-      `Tandai invoice ${invoice.invoice_number} sebagai LUNAS?\n\n` +
-        `Total: ${fmtRp(invoice.total_amount)}\n` +
-        `Customer: ${invoice.customer_name || "—"}\n\n` +
-        `Aksi ini akan mencatat tanggal pembayaran hari ini dan ` +
-        `(untuk order baru) menggenerate komisi teknisi & marketing.`
-    );
-    if (!sure) return;
-
-    setBusy("mark-paid");
-    try {
-      const res = await fetch("/api/invoice-admin/mark-paid", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoice_id: invoice.id }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || `HTTP ${res.status}`);
-      }
-
-      let msg = `✓ Invoice ${invoice.invoice_number} ditandai LUNAS.`;
-      if (json.data?.commission_eligible) {
-        const cr = json.data.commission_result;
-        if (cr?.success) {
-          msg += `\n\nKomisi dibuat: ${cr.tech_commissions_created || 0} teknisi, ${
-            cr.marketing_commissions_created || 0
-          } marketing.`;
-        }
-      } else {
-        msg += `\n\n(Order lama — komisi sudah masuk dalam backfill April 2026.)`;
-      }
-      alert(msg);
-      await onChange();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      alert(`Gagal menandai lunas: ${msg}`);
-    } finally {
-      setBusy(null);
-    }
-  }
 
   async function handleResend() {
     alert("(Coming next) Resend email invoice");
@@ -185,47 +152,41 @@ function InvoicedCard({
         </div>
       </div>
 
-      {/* Action row. For read-only users we keep the Xendit link (read) but
-          drop the mark-paid / resend controls. If there's also no Xendit link,
-          the whole row is skipped so we don't render an empty bordered strip. */}
-      {invoice.xendit_payment_url || !readOnly ? (
-        <div className="flex items-center gap-2 pt-2 border-t border-neutral-100 flex-wrap">
-          {invoice.xendit_payment_url ? (
-            <a
-              href={invoice.xendit_payment_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-800 underline-offset-2 hover:underline"
-            >
-              🔗 Link Xendit
-            </a>
-          ) : null}
+      {/* Action row */}
+      <div className="flex items-center gap-2 pt-2 border-t border-neutral-100 flex-wrap">
+        {invoice.xendit_payment_url ? (
+          <a
+            href={invoice.xendit_payment_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-800 underline-offset-2 hover:underline"
+          >
+            🔗 Link Xendit
+          </a>
+        ) : null}
 
-          <div className="flex-1" />
+        <div className="flex-1" />
 
-          {!readOnly && !isPaid ? (
-            <button
-              type="button"
-              onClick={handleMarkPaid}
-              disabled={busy !== null}
-              className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-1.5 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              {busy === "mark-paid" ? "Memproses..." : "✓ Tandai Lunas"}
-            </button>
-          ) : null}
+        {!isPaid ? (
+          <button
+            type="button"
+            onClick={onMarkPaid}
+            disabled={busy !== null}
+            className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-1.5 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            ✓ Tandai Lunas
+          </button>
+        ) : null}
 
-          {!readOnly ? (
-            <button
-              type="button"
-              onClick={handleResend}
-              disabled={busy !== null}
-              className="inline-flex items-center gap-1 rounded-lg border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold px-2.5 py-1.5 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              {busy === "resend" ? "Mengirim..." : "✉ Kirim Ulang"}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+        <button
+          type="button"
+          onClick={handleResend}
+          disabled={busy !== null}
+          className="inline-flex items-center gap-1 rounded-lg border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold px-2.5 py-1.5 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition"
+        >
+          {busy === "resend" ? "Mengirim..." : "✉ Kirim Ulang"}
+        </button>
+      </div>
     </article>
   );
 }
