@@ -359,3 +359,92 @@ export function buildLineItemsFromReport(
 
   return items;
 }
+
+// ──────────────────────────────────────────
+// Bank-linked payment marking.
+// Mirrors public.get_invoice_bank_candidates() and
+// public.mark_invoice_paid_with_bank().
+//
+// An invoice can only be marked paid by linking it to a row in the Maison Map
+// MMP bank book. Candidates are Sales AEAC credits on or after the work date,
+// with Xendit settlements excluded (they are batched and net of fees, so they
+// never equal a single invoice).
+// ──────────────────────────────────────────
+
+export type BankCandidate = {
+  bank_row_id: number;
+  bank_source: "MMP";
+  bank_code: string;
+  tanggal: string;            // "YYYY-MM-DD"
+  amount_in: number;
+  transaction_desc: string | null;
+  exact_match: boolean;
+  days_after_work: number;
+  already_linked: number;
+};
+
+export type BankCandidatesPayload = {
+  invoice: {
+    id: number;
+    invoice_number: string;
+    order_id: string;
+    customer_name: string | null;
+    total_amount: number;
+    status: string;
+    technicians: string[];
+    work_date: string | null;
+  };
+  candidates: BankCandidate[];
+};
+
+export type MarkPaidResult = {
+  ok: boolean;
+  already_paid?: boolean;
+  invoice_id?: number;
+  order_id?: string;
+  paid_date?: string;
+  bank?: {
+    bank_row_id: number;
+    bank_code: string;
+    tanggal: string;
+    amount_in: number;
+    transaction_desc: string | null;
+  };
+  commission_result?: {
+    success?: boolean;
+    tech_commissions_created?: number;
+    tech_skipped?: string[];
+    tech_eligible?: boolean;
+    marketing_result?: {
+      created?: boolean;
+      team_code?: string | null;
+      amount?: number;
+      message?: string;
+    };
+    error?: string;
+    note?: string;
+  };
+};
+
+// "2026-08-14" → "14 Agu 2026". Short form for the candidate list.
+const BULAN_ID_SHORT = [
+  "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+  "Jul", "Agu", "Sep", "Okt", "Nov", "Des",
+];
+
+export function fmtTanggalShort(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return iso;
+  const day = Number(m[3]);
+  const monthIdx = Number(m[2]) - 1;
+  return `${day} ${BULAN_ID_SHORT[monthIdx] ?? m[2]} ${m[1]}`;
+}
+
+// "23 hari" / "hari yang sama" — gap between work date and the bank credit.
+export function fmtJarakHari(days: number | null | undefined): string {
+  const d = Number(days);
+  if (!Number.isFinite(d)) return "";
+  if (d <= 0) return "hari yang sama";
+  return `${d} hari`;
+}
