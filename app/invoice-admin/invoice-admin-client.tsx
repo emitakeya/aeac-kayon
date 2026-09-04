@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type {
   InvoiceAdminData,
   OrderForInvoicing,
@@ -138,7 +139,17 @@ export default function InvoiceAdminClient({
   const invoicedCount = data.invoices.length;
 
   return (
-    <main className="max-w-3xl mx-auto px-3 pb-16 pt-6">
+    <main className="max-w-3xl mx-auto px-3 pb-16 pt-4">
+      {/* Session 40 — back to dashboard */}
+      <nav className="mb-2">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1 text-sm font-medium text-neutral-600 hover:text-amber-700 transition"
+        >
+          ← Dashboard
+        </Link>
+      </nav>
+
       {/* Header card */}
       <section className="rounded-2xl border border-neutral-200 bg-white shadow-sm overflow-hidden mb-4">
         <div className="h-1.5 bg-gradient-to-r from-amber-500 to-amber-600" />

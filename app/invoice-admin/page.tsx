@@ -5,6 +5,7 @@
 // read-only view (readOnly flag below); write RPCs stay finance/admin-only.
 
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { InvoiceAdminData } from "@/lib/invoices";
 import InvoiceAdminClient from "./invoice-admin-client";
@@ -47,6 +48,11 @@ export default async function Page({
   if (error) {
     return (
       <main className="max-w-3xl mx-auto px-4 py-8">
+        <nav className="mb-2">
+          <Link href="/" className="text-sm font-medium text-neutral-600 hover:text-amber-700">
+            ← Dashboard
+          </Link>
+        </nav>
         <h1 className="text-xl font-semibold text-neutral-900 mb-2">
           Invoice Admin — AEAC
         </h1>
