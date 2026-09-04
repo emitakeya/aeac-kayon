@@ -5,6 +5,8 @@ import { useState } from "react";
 import {
   type InvoiceRow,
   fmtRp,
+  fmtJadwalInvoice,
+  fmtPesananOleh,
   groupInvoicesByMonth,
   currentMonthKey,
 } from "@/lib/invoices";
@@ -122,7 +124,9 @@ function InvoicedCard({
   onMarkPaid: () => void;
 }) {
   const [busy, setBusy] = useState<null | "resend">(null);
+  const [open, setOpen] = useState(false);
   const isPaid = invoice.status === "paid";
+  const detailId = `inv-detail-${invoice.id}`;
 
   async function handleResend() {
     alert("(Coming next) Resend email invoice");
@@ -144,6 +148,17 @@ function InvoicedCard({
           <p className="text-xs text-neutral-600 mt-0.5 truncate">
             {[invoice.apartment, invoice.unit].filter(Boolean).join(" / ") || "—"}
           </p>
+          {/* Session 40 — schedule + who ordered (staff MM), always visible */}
+          <p className="text-xs text-neutral-600 mt-1.5 flex items-center gap-1.5 flex-wrap">
+            <span>📅 {fmtJadwalInvoice(invoice.scheduled_date)}</span>
+            <span className="text-neutral-300">|</span>
+            <span>
+              👤 Pesanan:{" "}
+              <span className="font-semibold text-neutral-900">
+                {fmtPesananOleh(invoice)}
+              </span>
+            </span>
+          </p>
         </div>
         <div className="shrink-0 text-right">
           <p className="text-sm font-bold text-neutral-900 leading-none">
@@ -160,8 +175,17 @@ function InvoicedCard({
       {/* Action row. For read-only users we keep the Xendit link (read) but
           drop the mark-paid / resend controls. If there's also no Xendit link,
           the whole row is skipped so we don't render an empty bordered strip. */}
-      {invoice.xendit_payment_url || !readOnly ? (
-        <div className="flex items-center gap-2 pt-2 border-t border-neutral-100 flex-wrap">
+      <div className="flex items-center gap-2 pt-2 border-t border-neutral-100 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-controls={detailId}
+            className="inline-flex items-center gap-1 rounded-lg border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold px-2.5 py-1.5 active:scale-[0.98] transition"
+          >
+            {open ? "▴ Tutup" : "▾ Detail"}
+          </button>
+
           {invoice.xendit_payment_url ? (
             <a
               href={invoice.xendit_payment_url}
@@ -197,7 +221,98 @@ function InvoicedCard({
             </button>
           ) : null}
         </div>
-      ) : null}
+
+      {open ? <InvoiceDetail id={detailId} invoice={invoice} /> : null}
     </article>
+  );
+}
+
+// ──────────────────────────────────────────
+// Session 40 — inline detail block (read-only)
+function InvoiceDetail({ id, invoice }: { id: string; invoice: InvoiceRow }) {
+  const items = Array.isArray(invoice.line_items) ? invoice.line_items : [];
+  const techs = (invoice.technicians ?? []).filter(Boolean);
+
+  return (
+    <div
+      id={id}
+      className="mt-2.5 pt-2.5 border-t border-dashed border-neutral-300 text-xs"
+    >
+      {/* Line items */}
+      <table className="w-full">
+        <tbody>
+          {items.length === 0 ? (
+            <tr>
+              <td className="py-1 text-neutral-500" colSpan={2}>
+                Tidak ada rincian item.
+              </td>
+            </tr>
+          ) : (
+            items.map((li, idx) => (
+              <tr key={idx} className="border-b border-neutral-100">
+                <td className="py-1 pr-2 text-neutral-800">
+                  {li.name}
+                  {li.qty > 1 ? (
+                    <span className="text-neutral-500"> × {li.qty}</span>
+                  ) : null}
+                </td>
+                <td className="py-1 text-right whitespace-nowrap text-neutral-800">
+                  {fmtRp(li.amount)}
+                </td>
+              </tr>
+            ))
+          )}
+          <tr>
+            <td className="pt-1.5 text-right text-neutral-500">Subtotal</td>
+            <td className="pt-1.5 text-right whitespace-nowrap">
+              {fmtRp(invoice.subtotal)}
+            </td>
+          </tr>
+          <tr>
+            <td className="py-0.5 text-right text-neutral-500">Diskon</td>
+            <td className="py-0.5 text-right whitespace-nowrap">
+              {fmtRp(invoice.discount)}
+            </td>
+          </tr>
+          <tr>
+            <td className="py-0.5 text-right font-semibold text-neutral-900">Total</td>
+            <td className="py-0.5 text-right whitespace-nowrap font-semibold text-neutral-900">
+              {fmtRp(invoice.total_amount)}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* Facts */}
+      <table className="w-full mt-2">
+        <tbody>
+          <tr>
+            <td className="py-0.5 pr-2 align-top text-neutral-500 w-[110px]">Teknisi</td>
+            <td className="py-0.5 align-top text-neutral-800">
+              {techs.length ? techs.join(", ") : "—"}
+            </td>
+          </tr>
+          <tr>
+            <td className="py-0.5 pr-2 align-top text-neutral-500">Pesanan oleh</td>
+            <td className="py-0.5 align-top text-neutral-800">
+              {fmtPesananOleh(invoice)}
+              {invoice.ordered_by_email ? (
+                <span className="text-neutral-400"> ({invoice.ordered_by_email})</span>
+              ) : null}
+            </td>
+          </tr>
+          <tr>
+            <td className="py-0.5 pr-2 align-top text-neutral-500">Catatan order</td>
+            <td className="py-0.5 align-top whitespace-pre-line">
+              {invoice.order_notes ? (
+                <span className="text-neutral-800">{invoice.order_notes}</span>
+              ) : (
+                <span className="text-neutral-400">—</span>
+              )}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   );
 }

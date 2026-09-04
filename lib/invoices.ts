@@ -53,6 +53,10 @@ export type InvoiceRow = {
   xendit_invoice_id: string | null;
   xendit_payment_url: string | null;
   xendit_status: string | null;
+  // Session 40 — added by get_invoice_admin_data() (not columns on invoices):
+  ordered_by: string | null;        // resolved staff name, or raw email, or null
+  ordered_by_email: string | null;  // customers.ordered_by_email
+  order_notes: string | null;       // orders.notes
 };
 
 export type ServiceRow = {
@@ -447,4 +451,33 @@ export function fmtJarakHari(days: number | null | undefined): string {
   if (!Number.isFinite(d)) return "";
   if (d <= 0) return "hari yang sama";
   return `${d} hari`;
+}
+
+// ──────────────────────────────────────────
+// Session 40 — invoice card meta line
+// ──────────────────────────────────────────
+
+const HARI_ID_SHORT = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+
+// invoices.scheduled_date is free text from the booking, e.g.
+//   "2026-09-04 (Jumat) PM"  or  "2026-09-03 (木) PM"
+// Weekday is recomputed from the ISO date so Japanese-form bookings render
+// in Indonesian too. Trailing AM/PM (if any) is kept.
+//   -> "Jum 4 Sep · PM"
+export function fmtJadwalInvoice(raw: string | null | undefined): string {
+  if (!raw) return "—";
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return raw;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const dow = new Date(Date.UTC(y, mo - 1, d)).getUTCDay();
+  const slot = raw.match(/\b(AM|PM)\b/i)?.[1]?.toUpperCase();
+  const base = `${HARI_ID_SHORT[dow]} ${d} ${BULAN_ID_SHORT[mo - 1] ?? m[2]}`;
+  return slot ? `${base} · ${slot}` : base;
+}
+
+// Label for the "Pesanan" field. null => customer booked directly.
+export function fmtPesananOleh(inv: Pick<InvoiceRow, "ordered_by">): string {
+  return inv.ordered_by && inv.ordered_by.trim() ? inv.ordered_by : "Customer langsung";
 }
