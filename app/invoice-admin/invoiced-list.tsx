@@ -17,13 +17,34 @@ export default function InvoicedList({
   invoices,
   onChange,
   readOnly = false,
+  initialOpenMonths = null,
+  onOpenMonthsChange,
+  initialOpenDetails = null,
+  onOpenDetailsChange,
 }: {
   invoices: InvoiceRow[];
   onChange: () => void | Promise<void>;
   readOnly?: boolean;
+  initialOpenMonths?: string[] | null;
+  onOpenMonthsChange?: (keys: string[]) => void;
+  initialOpenDetails?: number[] | null;
+  onOpenDetailsChange?: (ids: number[]) => void;
 }) {
   // Lifted to the list so only one modal exists at a time.
   const [markPaidFor, setMarkPaidFor] = useState<InvoiceRow | null>(null);
+
+  // Session 40 — which cards have the inline detail expanded. Lifted here so
+  // it survives accordion toggles and can be mirrored to the URL.
+  const [openDetails, setOpenDetails] = useState<Set<number>>(
+    () => new Set(initialOpenDetails ?? [])
+  );
+  function toggleDetail(id: number) {
+    const next = new Set(openDetails);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setOpenDetails(next);
+    onOpenDetailsChange?.(Array.from(next));
+  }
 
   if (invoices.length === 0) {
     return (
@@ -68,6 +89,8 @@ export default function InvoicedList({
               invoice={inv}
               readOnly={readOnly}
               onMarkPaid={() => setMarkPaidFor(inv)}
+              open={openDetails.has(inv.id)}
+              onToggleDetail={() => toggleDetail(inv.id)}
             />
           ))}
         </>
@@ -77,7 +100,12 @@ export default function InvoicedList({
 
   return (
     <>
-      <MonthAccordion items={items} defaultOpenKey={defaultOpenKey} />
+      <MonthAccordion
+        items={items}
+        defaultOpenKey={defaultOpenKey}
+        initialOpenKeys={initialOpenMonths}
+        onOpenChange={onOpenMonthsChange}
+      />
 
       {markPaidFor ? (
         <MarkPaidModal
@@ -118,13 +146,16 @@ function InvoicedCard({
   invoice,
   readOnly = false,
   onMarkPaid,
+  open,
+  onToggleDetail,
 }: {
   invoice: InvoiceRow;
   readOnly?: boolean;
   onMarkPaid: () => void;
+  open: boolean;
+  onToggleDetail: () => void;
 }) {
   const [busy, setBusy] = useState<null | "resend">(null);
-  const [open, setOpen] = useState(false);
   const isPaid = invoice.status === "paid";
   const detailId = `inv-detail-${invoice.id}`;
 
@@ -178,7 +209,7 @@ function InvoicedCard({
       <div className="flex items-center gap-2 pt-2 border-t border-neutral-100 flex-wrap">
           <button
             type="button"
-            onClick={() => setOpen((v) => !v)}
+            onClick={onToggleDetail}
             aria-expanded={open}
             aria-controls={detailId}
             className="inline-flex items-center gap-1 rounded-lg border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold px-2.5 py-1.5 active:scale-[0.98] transition"

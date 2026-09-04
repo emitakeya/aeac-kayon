@@ -22,25 +22,35 @@ const TONE_STYLES: Record<"paid" | "unpaid" | "muted", string> = {
 export default function MonthAccordion({
   items,
   defaultOpenKey,
+  initialOpenKeys,
+  onOpenChange,
 }: {
   items: MonthAccordionItem[];
   /** monthKey to start expanded. Others start collapsed. */
   defaultOpenKey: string | null;
+  /** Session 40 — explicit set of open keys (from the URL). When provided it
+   *  wins over defaultOpenKey, even if empty (user collapsed everything). */
+  initialOpenKeys?: string[] | null;
+  /** Session 40 — called with the full list of open keys after every toggle. */
+  onOpenChange?: (keys: string[]) => void;
 }) {
   // Track open keys as a Set so multiple can be open at once after user clicks.
   const [open, setOpen] = useState<Set<string>>(() => {
     const s = new Set<string>();
-    if (defaultOpenKey) s.add(defaultOpenKey);
+    if (initialOpenKeys) {
+      for (const k of initialOpenKeys) s.add(k);
+    } else if (defaultOpenKey) {
+      s.add(defaultOpenKey);
+    }
     return s;
   });
 
   function toggle(key: string) {
-    setOpen((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+    const next = new Set(open);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setOpen(next);
+    onOpenChange?.(Array.from(next));
   }
 
   return (

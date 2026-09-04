@@ -8,10 +8,19 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { InvoiceAdminData } from "@/lib/invoices";
 import InvoiceAdminClient from "./invoice-admin-client";
+import { parseView } from "./view-state";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  // Session 40 — restore tab / open months / open details from the URL so an
+  // F5 (or a shared link) renders the same view server-side, with no flash.
+  const initialView = parseView(await searchParams);
+
   const supabase = await createClient();
 
   // Auth gate
@@ -58,5 +67,11 @@ export default async function Page() {
     technicians: [],
   }) as InvoiceAdminData;
 
-  return <InvoiceAdminClient initialData={initialData} readOnly={readOnly} />;
+  return (
+    <InvoiceAdminClient
+      initialData={initialData}
+      readOnly={readOnly}
+      initialView={initialView}
+    />
+  );
 }

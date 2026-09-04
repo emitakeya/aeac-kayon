@@ -9,20 +9,49 @@ import type {
 import PendingList from "./pending-list";
 import InvoicedList from "./invoiced-list";
 import InvoiceEditor from "./invoice-editor";
-
-type Tab = "pending" | "invoiced";
+import { type Tab, type InvoiceAdminView, writeView } from "./view-state";
 
 export default function InvoiceAdminClient({
   initialData,
   readOnly = false,
+  initialView,
 }: {
   initialData: InvoiceAdminData;
   readOnly?: boolean;
+  /** Session 40 — view restored from the URL by page.tsx (F5-safe). */
+  initialView?: InvoiceAdminView;
 }) {
   const [data, setData] = useState<InvoiceAdminData>(initialData);
   // Read-only users (technicians) start on the invoiced list — the "Perlu
-  // Invoice" tab is a create workflow they can't use.
-  const [tab, setTab] = useState<Tab>(readOnly ? "invoiced" : "pending");
+  // Invoice" tab is a create workflow they can't use. Otherwise honour the
+  // tab in the URL, falling back to "pending".
+  const [tab, setTabState] = useState<Tab>(() => {
+    if (readOnly) return "invoiced";
+    return initialView?.tab ?? "pending";
+  });
+  function setTab(next: Tab) {
+    setTabState(next);
+    writeView({ tab: next });
+  }
+
+  // Live copy of the URL-backed view. Lists unmount on tab switch, so they
+  // must re-mount from *this* (current) state, not the page-load snapshot.
+  const [view, setView] = useState<InvoiceAdminView>(
+    initialView ?? {
+      tab: null,
+      pendingMonths: null,
+      invoicedMonths: null,
+      detailIds: null,
+    }
+  );
+  function updateView(patch: Partial<Omit<InvoiceAdminView, "tab">>) {
+    setView((v) => ({ ...v, ...patch }));
+    writeView({
+      pendingMonths: patch.pendingMonths ?? undefined,
+      invoicedMonths: patch.invoicedMonths ?? undefined,
+      detailIds: patch.detailIds ?? undefined,
+    });
+  }
   const [refreshing, setRefreshing] = useState(false);
 
   // The editor view replaces the list view when an order is selected.
@@ -175,12 +204,18 @@ export default function InvoiceAdminClient({
           invoices={data.invoices}
           onSelectOrder={handleSelectOrder}
           loadingOrderId={loadingOrder}
+          initialOpenMonths={view.pendingMonths}
+          onOpenMonthsChange={(keys) => updateView({ pendingMonths: keys })}
         />
       ) : (
         <InvoicedList
           invoices={data.invoices}
           onChange={refreshAll}
           readOnly={readOnly}
+          initialOpenMonths={view.invoicedMonths}
+          onOpenMonthsChange={(keys) => updateView({ invoicedMonths: keys })}
+          initialOpenDetails={view.detailIds}
+          onOpenDetailsChange={(ids) => updateView({ detailIds: ids })}
         />
       )}
 

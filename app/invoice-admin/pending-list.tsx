@@ -16,11 +16,15 @@ export default function PendingList({
   invoices,
   onSelectOrder,
   loadingOrderId,
+  initialOpenMonths = null,
+  onOpenMonthsChange,
 }: {
   orders: CompletedOrder[];
   invoices: InvoiceRow[];
   onSelectOrder: (orderId: string) => void | Promise<void>;
   loadingOrderId: string | null;
+  initialOpenMonths?: string[] | null;
+  onOpenMonthsChange?: (keys: string[]) => void;
 }) {
   const pending = filterPendingInvoice(orders, invoices);
 
@@ -65,7 +69,14 @@ export default function PendingList({
     ),
   }));
 
-  return <MonthAccordion items={items} defaultOpenKey={defaultOpenKey} />;
+  return (
+    <MonthAccordion
+      items={items}
+      defaultOpenKey={defaultOpenKey}
+      initialOpenKeys={initialOpenMonths}
+      onOpenChange={onOpenMonthsChange}
+    />
+  );
 }
 
 function PendingCard({
