@@ -1,8 +1,8 @@
 // app/laporan-teknisi/step4-foto.tsx
 // Step 4: photo upload. Two sides: before / after. Max 4 each.
 // Photos are compressed on add (handled by parent's addPhotos callback).
-// `capture="environment"` opens the rear camera on phones; `multiple` lets
-// the user pick from gallery too.
+// No `capture` attribute: the phone shows its normal picker sheet, so the
+// technician can choose camera OR gallery. `multiple` allows batch selection.
 
 "use client";
 
@@ -101,7 +101,6 @@ function PhotoSide({
         ref={inputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         multiple
         className="hidden"
         onChange={async (e) => {
