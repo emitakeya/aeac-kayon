@@ -9,8 +9,9 @@
 
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { clearDraft, loadDraft, saveDraft } from "@/lib/laporan-draft";
 import {
   BCC_FIXED,
   MAX_PHOTOS_PER_SIDE,
@@ -96,6 +97,11 @@ export default function LaporanForm({
 }) {
   // ───────────── Step state
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+
+  // False until the sessionStorage draft has been read on mount. The server
+  // render and the first client render must agree, so the restore happens in
+  // an effect and the form body is held back for that one frame.
+  const [hydrated, setHydrated] = useState(false);
 
   // ───────────── Step 1 state
   const [selectedOrderId, setSelectedOrderId] = useState<string>("");
@@ -200,6 +206,75 @@ export default function LaporanForm({
   const isSubmitting =
     submitStage !== "idle" && submitStage !== "done" && submitStage !== "error";
   const isDone = submitStage === "done";
+
+  // ───────────── Draft restore (runs once, on mount)
+  useEffect(() => {
+    const draft = loadDraft();
+    if (draft) {
+      // The order list is re-fetched server-side on every load. If the saved
+      // order is no longer in it (someone else completed it, or the schedule
+      // moved on), the draft's later steps are meaningless — keep the work
+      // that was typed but send the technician back to Step 1 to re-pick.
+      const orderStillListed =
+        draft.selectedOrderId !== "" &&
+        initial.orders.some((o) => o.order_id === draft.selectedOrderId);
+
+      setSelectedOrderId(orderStillListed ? draft.selectedOrderId : "");
+      if (draft.selectedTechs.length > 0) setSelectedTechs(draft.selectedTechs);
+      setJamMulai(draft.jamMulai);
+      setJamSelesai(draft.jamSelesai);
+      setServiceCounts(draft.serviceCounts);
+      setSelectedKondisi(draft.selectedKondisi);
+      setSelectedTindakan(draft.selectedTindakan);
+      setSelectedRekomendasi(draft.selectedRekomendasi);
+      setSelectedPerbaikan(draft.selectedPerbaikan);
+      setInvoiceItems(draft.invoiceItems);
+      setInvoiceDiscount(draft.invoiceDiscount);
+      lastSeededSig.current = draft.lastSeededSig;
+      setStep(orderStillListed ? draft.step : 1);
+    }
+    setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ───────────── Draft autosave
+  // Skipped once the submit chain is running: from that point the draft is
+  // cleared deliberately (see submit()) and re-writing it would resurrect a
+  // report that has already been saved to the DB.
+  useEffect(() => {
+    if (!hydrated || isSubmitting || isDone) return;
+    saveDraft({
+      step,
+      selectedOrderId,
+      selectedTechs,
+      jamMulai,
+      jamSelesai,
+      serviceCounts,
+      selectedKondisi,
+      selectedTindakan,
+      selectedRekomendasi,
+      selectedPerbaikan,
+      invoiceItems,
+      invoiceDiscount,
+      lastSeededSig: lastSeededSig.current,
+    });
+  }, [
+    hydrated,
+    isSubmitting,
+    isDone,
+    step,
+    selectedOrderId,
+    selectedTechs,
+    jamMulai,
+    jamSelesai,
+    serviceCounts,
+    selectedKondisi,
+    selectedTindakan,
+    selectedRekomendasi,
+    selectedPerbaikan,
+    invoiceItems,
+    invoiceDiscount,
+  ]);
 
   // ───────────── Photo handlers (compress on add)
   async function addPhotos(side: "before" | "after", files: FileList | null) {
@@ -372,6 +447,11 @@ export default function LaporanForm({
         email_lang: "id",
       });
       if (reportErr) throw new Error(`Simpan laporan gagal: ${reportErr.message}`);
+
+      // The report now exists in the DB. Drop the draft immediately — if a
+      // later stage fails and the technician refreshes, we must NOT hand them
+      // back a pre-filled form that would insert the same report twice.
+      clearDraft();
 
       // 3. PATCH orders → completed
       setSubmitStage("order");
@@ -602,6 +682,7 @@ export default function LaporanForm({
   }
 
   function resetForm() {
+    clearDraft();
     // Revoke preview URLs to avoid memory leaks
     [...photosBefore, ...photosAfter].forEach((p) =>
       URL.revokeObjectURL(p.preview),
@@ -760,6 +841,16 @@ export default function LaporanForm({
   }
 
   // ───────────── Main step layout
+  if (!hydrated) {
+    return (
+      <main className="max-w-[480px] mx-auto px-3 pb-16 pt-4">
+        <Header step={1} />
+        <Progress current={1} />
+        <div className="mt-4 h-72 rounded-2xl border border-neutral-200 bg-white shadow-sm animate-pulse" />
+      </main>
+    );
+  }
+
   return (
     <main className="max-w-[480px] mx-auto px-3 pb-16 pt-4">
       <Header step={step} />
