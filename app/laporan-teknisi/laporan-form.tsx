@@ -36,6 +36,7 @@ import {
   buildLineItemsFromReport,
   calcSubtotal,
   calcTotal,
+  combineCustomerEmails,
   fmtRp,
 } from "@/lib/invoices";
 import Step1Order from "./step1-order";
@@ -388,7 +389,10 @@ export default function LaporanForm({
     const subtotal = calcSubtotal(invoiceItems);
     const total = calcTotal(invoiceItems, invoiceDiscount);
     const customerName = customerDisplayName(customer);
-    const customerEmail = (customer.email ?? "").trim();
+    // customer.email may be NULL for staff-booked orders — fall back to the
+    // pemesan address (customers.ordered_by_email). Same helper /invoice-admin
+    // and /tech-invoice already use.
+    const customerEmail = combineCustomerEmails(customer);
 
     try {
       // 1. Upload photos
@@ -526,6 +530,14 @@ export default function LaporanForm({
               "Link pembayaran Xendit gagal dibuat — gunakan transfer bank (info di email).",
             );
           }
+        } else if (!customerEmail) {
+          warnings.push(
+            "Tidak ada alamat email customer maupun pemesan — invoice tidak terkirim. Hubungi admin.",
+          );
+        } else {
+          warnings.push(
+            "Total di bawah Rp 10.000 — link pembayaran online tidak dibuat.",
+          );
         }
 
         // 6. Save invoice via the TOKEN-GATED route (create_invoice_by_token).

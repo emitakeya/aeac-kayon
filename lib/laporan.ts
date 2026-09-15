@@ -17,6 +17,7 @@ export type CustomerLite = {
   unit: string | null;
   mobile: string | null;
   email: string | null;
+  ordered_by_email: string | null;
 };
 
 export type LaporanOrder = {
