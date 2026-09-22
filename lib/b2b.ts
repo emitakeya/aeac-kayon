@@ -3,7 +3,7 @@
 // Data comes from the b2b_* SECURITY DEFINER RPCs (migrations aeac_b2b_01 / _02).
 
 /** Shown in the sidebar so staff can see a new version is live. Bump on each release. */
-export const B2B_VERSION = 'v1.2';
+export const B2B_VERSION = 'v1.3';
 
 export type Area = { id: string; name: string; count: number };
 export type Staff = { id: string; name: string };
@@ -73,6 +73,24 @@ export type Activity = {
 };
 
 export type ProspectDetail = { prospect: Prospect; activities: Activity[] };
+
+export type SummaryGroupRow = { name: string; n: number; pic: number; int: number; won: number };
+
+export type Summary = {
+  from: string;
+  to: string;
+  first: string | null;
+  today: string;
+  kpi: {
+    new: number; visits: number; contacts: number; pic: number;
+    survey: number; quotation: number; won: number; lost: number;
+  };
+  funnel: { prospects: number; pic: number; interested: number; survey: number; quotation: number; won: number };
+  followup: { over: number; today: number; none: number };
+  lost_reasons: { reason: string; n: number }[];
+  by_area: SummaryGroupRow[];
+  by_category: SummaryGroupRow[];
+};
 
 // ── Labels ──────────────────────────────────────────────────────────────────
 
