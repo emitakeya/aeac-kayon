@@ -1,6 +1,9 @@
 // lib/b2b.ts
 // Types, labels and small helpers for the /b2b Prospek pilot.
-// Data comes from the b2b_* SECURITY DEFINER RPCs (migration aeac_b2b_01_prospek).
+// Data comes from the b2b_* SECURITY DEFINER RPCs (migrations aeac_b2b_01 / _02).
+
+/** Shown in the sidebar so staff can see a new version is live. Bump on each release. */
+export const B2B_VERSION = 'v1.1';
 
 export type Area = { id: string; name: string; count: number };
 export type Staff = { id: string; name: string };
@@ -39,10 +42,12 @@ export type Prospect = {
   pic_phone: string | null;
   pic_email: string | null;
   ac_types: string[];
+  ac_units: Record<string, number>;
   estimated_units: number | null;
   existing_vendor: string;
   vendor_price_notes: string | null;
   needs: string | null;
+  lead_origin: string | null;
   source: string | null;
   status: string;
   lost_reason: string | null;
@@ -115,9 +120,15 @@ export const VENDOR: [string, string][] = [
 export const SOURCES: [string, string][] = [
   ['walk_in', 'Kunjungan langsung'],
   ['google_maps', 'Google Maps'],
+  ['website', 'Website'],
   ['referral', 'Referensi'],
   ['spreadsheet', 'Spreadsheet lama'],
   ['other', 'Lainnya'],
+];
+
+export const ORIGINS: [string, string][] = [
+  ['outbound', 'Kami (hunting)'],
+  ['inbound', 'Mereka menghubungi kami'],
 ];
 
 export const LOST_REASONS: [string, string][] = [
@@ -138,6 +149,7 @@ export const ACTIVITY_TYPES: [string, string][] = [
   ['survey', 'Survei'],
   ['quotation', 'Penawaran'],
   ['meeting', 'Meeting'],
+  ['order', 'Order'],
   ['note', 'Catatan'],
   ['other', 'Lainnya'],
 ];
@@ -151,6 +163,7 @@ export const STATUS_CLASS = Object.fromEntries(STATUSES.map((s) => [s[0], s[2]])
 export const AC_LABEL = toMap(AC_TYPES);
 export const VENDOR_LABEL = toMap(VENDOR);
 export const SOURCE_LABEL = toMap(SOURCES);
+export const ORIGIN_LABEL = toMap(ORIGINS);
 export const LOST_REASON_LABEL = toMap(LOST_REASONS);
 export const ACTIVITY_LABEL: Record<string, string> = { ...toMap(ACTIVITY_TYPES), created: 'Dibuat' };
 

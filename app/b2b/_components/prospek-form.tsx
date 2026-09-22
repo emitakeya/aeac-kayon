@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import {
-  AC_TYPES, CATEGORIES, SOURCES, STATUSES, VENDOR, addDays, jakartaToday,
+  AC_TYPES, CATEGORIES, ORIGINS, SOURCES, STATUSES, VENDOR, addDays, jakartaToday,
   type B2BMeta, type Prospect,
 } from '@/lib/b2b';
 import AreaPicker, { type AreaValue } from './area-picker';
@@ -32,10 +32,12 @@ type Form = {
   pic_phone: string;
   pic_email: string;
   ac_types: string[];
+  ac_units: Record<string, string>;
   estimated_units: string;
   existing_vendor: string;
   vendor_price_notes: string;
   needs: string;
+  lead_origin: string;
   source: string;
   staff_ids: string[];
   // create only
@@ -57,10 +59,14 @@ function initial(p: Prospect | null, me: string): Form {
     pic_phone: p?.pic_phone ?? '',
     pic_email: p?.pic_email ?? '',
     ac_types: p?.ac_types ?? [],
+    ac_units: Object.fromEntries(
+      Object.entries(p?.ac_units ?? {}).map(([k, v]) => [k, String(v)]),
+    ),
     estimated_units: p?.estimated_units != null ? String(p.estimated_units) : '',
     existing_vendor: p?.existing_vendor ?? 'unknown',
     vendor_price_notes: p?.vendor_price_notes ?? '',
     needs: p?.needs ?? '',
+    lead_origin: p ? (p.lead_origin ?? '') : 'outbound',
     source: p?.source ?? 'walk_in',
     staff_ids: p?.staff_ids ?? [me],
     status: 'new_lead',
@@ -82,6 +88,18 @@ export default function ProspekForm({
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((s) => ({ ...s, [k]: v }));
   const toggle = (k: 'ac_types' | 'staff_ids', v: string) =>
     setF((s) => ({ ...s, [k]: s[k].includes(v) ? s[k].filter((x) => x !== v) : [...s[k], v] }));
+  const toggleAc = (t: string) =>
+    setF((s) => {
+      if (s.ac_types.includes(t)) {
+        const units = { ...s.ac_units };
+        delete units[t];
+        return { ...s, ac_types: s.ac_types.filter((x) => x !== t), ac_units: units };
+      }
+      return { ...s, ac_types: [...s.ac_types, t] };
+    });
+  const setUnit = (t: string, v: string) =>
+    setF((s) => ({ ...s, ac_units: { ...s.ac_units, [t]: v.replace(/\D/g, '').slice(0, 5) } }));
+  const unitSum = Object.values(f.ac_units).reduce((n, v) => n + (parseInt(v, 10) || 0), 0);
 
   async function save(extra?: { is_archived?: boolean }) {
     setErr(null);
@@ -105,10 +123,14 @@ export default function ProspekForm({
       pic_phone: f.pic_phone,
       pic_email: f.pic_email,
       ac_types: f.ac_types,
-      estimated_units: f.estimated_units,
+      ac_units: Object.fromEntries(
+        Object.entries(f.ac_units).filter(([, v]) => (parseInt(v, 10) || 0) > 0).map(([k, v]) => [k, parseInt(v, 10)]),
+      ),
+      estimated_units: unitSum > 0 ? String(unitSum) : f.estimated_units,
       existing_vendor: f.existing_vendor,
       vendor_price_notes: f.vendor_price_notes,
       needs: f.needs,
+      lead_origin: f.lead_origin,
       source: f.source,
       staff_ids: f.staff_ids,
       ...(editing ? {} : {
@@ -198,13 +220,40 @@ export default function ProspekForm({
 
       <Card title="Peluang AC" note="Opsional">
         <div className="flex flex-col gap-2">
-          <span id="f-ac" className={LABEL}>Tipe AC (boleh lebih dari satu)</span>
-          <Chips options={AC_TYPES} selected={f.ac_types} onToggle={(k) => toggle('ac_types', k)} labelledBy="f-ac" />
+          <span id="f-ac" className={LABEL}>Tipe AC &amp; jumlah unit</span>
+          <p className="text-xs text-neutral-600">Pilih tipe, lalu isi jumlahnya jika tahu.</p>
+          <div role="group" aria-labelledby="f-ac" className="flex flex-wrap gap-2">
+            {AC_TYPES.map(([k, l]) => {
+              const on = f.ac_types.includes(k);
+              return (
+                <div key={k}
+                  className={'flex items-center rounded-full border transition ' +
+                    (on ? 'bg-aeac-amber-100 border-2 border-aeac-amber-600' : 'bg-white border-neutral-300')}>
+                  <button type="button" aria-pressed={on} onClick={() => toggleAc(k)}
+                    className={'min-h-10 px-3.5 text-[13px] font-semibold rounded-full ' +
+                      (on ? 'text-amber-900' : 'text-neutral-800')}>
+                    {l}
+                  </button>
+                  {on ? (
+                    <input type="text" inputMode="numeric" aria-label={`Jumlah unit ${l}`}
+                      value={f.ac_units[k] ?? ''} onChange={(e) => setUnit(k, e.target.value)} placeholder="unit"
+                      className="mr-1.5 h-8 w-16 rounded-full border border-aeac-amber-600 bg-white px-2 text-center text-sm focus:outline-none" />
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field id="f-unit" label="Perkiraan jumlah unit">
-            <input id="f-unit" type="number" min={0} inputMode="numeric" className={INPUT} value={f.estimated_units}
-              onChange={(e) => set('estimated_units', e.target.value)} placeholder="mis. 8" />
+          <Field id="f-unit" label="Total unit">
+            {unitSum > 0 ? (
+              <p className="flex h-11 items-center rounded-lg bg-neutral-50 px-3.5 text-sm">
+                <strong>{unitSum}</strong>&nbsp;unit <span className="ml-2 text-xs text-neutral-600">(otomatis dari jumlah per tipe)</span>
+              </p>
+            ) : (
+              <input id="f-unit" type="number" min={0} inputMode="numeric" className={INPUT} value={f.estimated_units}
+                onChange={(e) => set('estimated_units', e.target.value)} placeholder="Isi jika hanya tahu totalnya" />
+            )}
           </Field>
           <div className="flex flex-col gap-2">
             <span id="f-vendor" className={LABEL}>Sudah ada vendor AC?</span>
@@ -229,12 +278,19 @@ export default function ProspekForm({
           <Chips options={meta.staff.map((s) => [s.id, s.name] as [string, string])} selected={f.staff_ids}
             onToggle={(k) => toggle('staff_ids', k)} labelledBy="f-staf" />
         </div>
-        <Field id="f-sumber" label="Sumber">
-          <select id="f-sumber" className={INPUT + ' md:w-72'} value={f.source}
-            onChange={(e) => set('source', e.target.value)}>
-            {SOURCES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-          </select>
-        </Field>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <span id="f-origin" className={LABEL}>Siapa yang memulai?</span>
+            <Chips options={ORIGINS} selected={f.lead_origin ? [f.lead_origin] : []}
+              onToggle={(k) => set('lead_origin', k)} labelledBy="f-origin" />
+          </div>
+          <Field id="f-sumber" label="Dari mana?">
+            <select id="f-sumber" className={INPUT} value={f.source}
+              onChange={(e) => set('source', e.target.value)}>
+              {SOURCES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+          </Field>
+        </div>
 
         {!editing ? (
           <>

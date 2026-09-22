@@ -3,6 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { B2B_VERSION } from '@/lib/b2b';
 
 const ITEMS = [
   { href: '/b2b/prospek', label: 'Prospek', ready: true },
@@ -64,6 +65,7 @@ export default function B2BNav({ name, role }: { name: string; role: string }) {
           <Link href="/dashboard" className="mt-2 text-neutral-400 hover:text-neutral-100 text-xs">
             ← Kayon dashboard
           </Link>
+          <span className="mt-3 text-[11px] text-neutral-500">Prospek {B2B_VERSION}</span>
         </div>
       </nav>
 
@@ -76,6 +78,7 @@ export default function B2BNav({ name, role }: { name: string; role: string }) {
           <span className="font-bold text-sm">Kayon B2B</span>
         </Link>
         <span className="ml-auto text-xs text-neutral-400">{name}</span>
+        <span className="text-[10px] text-neutral-500">{B2B_VERSION}</span>
       </header>
     </>
   );

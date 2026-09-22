@@ -5,7 +5,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import {
-  AC_LABEL, ACTIVITY_LABEL, CATEGORY_LABEL, LOST_REASON_LABEL, SOURCE_LABEL, STATUS_LABEL, VENDOR_LABEL,
+  AC_LABEL, ACTIVITY_LABEL, CATEGORY_LABEL, LOST_REASON_LABEL, ORIGIN_LABEL, SOURCE_LABEL, STATUS_LABEL, VENDOR_LABEL,
   daysBetween, fmtDate, fmtDateTime, followupKind, jakartaToday, staffNames, waLink,
   type Activity, type B2BMeta, type ProspectDetail,
 } from '@/lib/b2b';
@@ -99,8 +99,10 @@ export default function ProspekDetailView({ detail, meta }: { detail: ProspectDe
             </InfoCard>
 
             <InfoCard title="Peluang AC">
-              <Row k="Tipe AC" v={p.ac_types.length ? p.ac_types.map((t) => AC_LABEL[t] ?? t).join(', ') : null} />
-              <Row k="Perkiraan unit" v={p.estimated_units != null ? String(p.estimated_units) : null} />
+              <Row k="Tipe AC" v={p.ac_types.length
+                ? p.ac_types.map((t) => (AC_LABEL[t] ?? t) + (p.ac_units?.[t] ? ` ${p.ac_units[t]}` : '')).join(' · ')
+                : null} />
+              <Row k="Total unit" v={p.estimated_units != null ? `${p.estimated_units} unit` : null} />
               <Row k="Sudah ada vendor" v={VENDOR_LABEL[p.existing_vendor]} />
               <Row k="Harga vendor" v={p.vendor_price_notes} />
               <Row k="Kebutuhan" v={p.needs} multiline />
@@ -108,7 +110,10 @@ export default function ProspekDetailView({ detail, meta }: { detail: ProspectDe
 
             <InfoCard title="Penanganan">
               <Row k="Staf" v={staffNames(p.staff)} />
-              <Row k="Sumber" v={p.source ? SOURCE_LABEL[p.source] : null} />
+              <Row k="Asal prospek" v={[
+                p.lead_origin ? ORIGIN_LABEL[p.lead_origin] : null,
+                p.source ? SOURCE_LABEL[p.source] : null,
+              ].filter(Boolean).join(' · ') || null} />
               <Row k="Dibuat" v={fmtDateTime(p.created_at)} />
             </InfoCard>
           </div>
