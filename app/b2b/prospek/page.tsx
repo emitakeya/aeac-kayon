@@ -5,7 +5,13 @@ import ProspekList from './prospek-list';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ProspekPage() {
+const FU_KEYS = ['over', 'today', 'soon', 'none'];
+
+export default async function ProspekPage({
+  searchParams,
+}: { searchParams: Promise<{ fu?: string }> }) {
+  const sp = await searchParams;
+  const initialFu = FU_KEYS.includes(sp.fu ?? '') ? (sp.fu as string) : '';
   const supabase = await createClient();
   const [list, meta] = await Promise.all([
     supabase.rpc('b2b_list_prospects'),
@@ -22,5 +28,12 @@ export default async function ProspekPage() {
     );
   }
 
-  return <ProspekList rows={(list.data ?? []) as ProspectRow[]} meta={meta.data as B2BMeta} />;
+  return (
+    <ProspekList
+      key={initialFu}
+      rows={(list.data ?? []) as ProspectRow[]}
+      meta={meta.data as B2BMeta}
+      initialFu={initialFu}
+    />
+  );
 }

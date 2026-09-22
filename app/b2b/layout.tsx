@@ -30,9 +30,11 @@ export default async function B2BLayout({ children }: { children: React.ReactNod
     ? me.staff_name.charAt(0).toUpperCase() + me.staff_name.slice(1).toLowerCase()
     : me.email;
 
+  const { data: overdue } = await supabase.rpc('b2b_overdue_count');
+
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-900 md:flex">
-      <B2BNav name={name} role={me.role} />
+      <B2BNav name={name} role={me.role} overdue={typeof overdue === 'number' ? overdue : 0} />
       <div className="flex-1 min-w-0">{children}</div>
     </div>
   );

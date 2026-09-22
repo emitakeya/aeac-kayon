@@ -16,7 +16,11 @@ const QUICK: [string, number][] = [['Besok', 1], ['3 hari', 3], ['1 minggu', 7],
 
 export default function ActivityLogger({
   prospect, meta, onClose,
-}: { prospect: Prospect; meta: B2BMeta; onClose: () => void }) {
+}: {
+  prospect: Pick<Prospect, 'id' | 'business_name' | 'status'>;
+  meta: B2BMeta;
+  onClose: () => void;
+}) {
   const router = useRouter();
   const today = jakartaToday();
   const [type, setType] = useState('');

@@ -3,7 +3,7 @@
 // Data comes from the b2b_* SECURITY DEFINER RPCs (migrations aeac_b2b_01 / _02).
 
 /** Shown in the sidebar so staff can see a new version is live. Bump on each release. */
-export const B2B_VERSION = 'v1.1';
+export const B2B_VERSION = 'v1.2';
 
 export type Area = { id: string; name: string; count: number };
 export type Staff = { id: string; name: string };
@@ -220,6 +220,14 @@ export function fmtDate(ymd: string | null): string {
   return new Intl.DateTimeFormat('id-ID', {
     timeZone: 'UTC', day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }),
   }).format(d);
+}
+
+/** "Rab, 23 Sep" — weekday + date, for the coming-week list. */
+export function fmtDay(ymd: string | null): string {
+  if (!ymd) return '—';
+  return new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short',
+  }).format(new Date(`${ymd.slice(0, 10)}T00:00:00Z`));
 }
 
 export function fmtDateTime(iso: string): string {

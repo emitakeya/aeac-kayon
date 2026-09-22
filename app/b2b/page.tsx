@@ -1,6 +1,6 @@
-// app/b2b/page.tsx — /b2b lands on the Prospek list.
+// app/b2b/page.tsx — /b2b lands on the daily Follow-up list.
 import { redirect } from 'next/navigation';
 
 export default function B2BIndex() {
-  redirect('/b2b/prospek');
+  redirect('/b2b/follow-up');
 }

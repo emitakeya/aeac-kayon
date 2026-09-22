@@ -7,11 +7,11 @@ import { B2B_VERSION } from '@/lib/b2b';
 
 const ITEMS = [
   { href: '/b2b/prospek', label: 'Prospek', ready: true },
-  { href: '/b2b/follow-up', label: 'Follow-up', ready: false },
+  { href: '/b2b/follow-up', label: 'Follow-up', ready: true },
   { href: '/b2b/ringkasan', label: 'Ringkasan', ready: false },
 ];
 
-export default function B2BNav({ name, role }: { name: string; role: string }) {
+export default function B2BNav({ name, role, overdue }: { name: string; role: string; overdue: number }) {
   const path = usePathname();
 
   return (
@@ -53,6 +53,9 @@ export default function B2BNav({ name, role }: { name: string; role: string }) {
                   }
                 >
                   {it.label}
+                  {it.href === '/b2b/follow-up' && overdue > 0 ? (
+                    <Badge n={overdue} />
+                  ) : null}
                 </Link>
               </li>
             );
@@ -80,6 +83,36 @@ export default function B2BNav({ name, role }: { name: string; role: string }) {
         <span className="ml-auto text-xs text-neutral-400">{name}</span>
         <span className="text-[10px] text-neutral-500">{B2B_VERSION}</span>
       </header>
+      <nav aria-label="Navigasi B2B" className="md:hidden sticky top-14 z-20 flex gap-1 bg-neutral-900 px-2 pb-2">
+        {ITEMS.filter((it) => it.ready).map((it) => {
+          const active = path.startsWith(it.href);
+          return (
+            <Link
+              key={it.href}
+              href={it.href}
+              aria-current={active ? 'page' : undefined}
+              className={
+                'flex-1 h-10 flex items-center justify-center gap-1.5 rounded-lg text-[13px] font-semibold ' +
+                (active ? 'bg-neutral-800 text-aeac-amber-400' : 'text-neutral-400')
+              }
+            >
+              {it.label}
+              {it.href === '/b2b/follow-up' && overdue > 0 ? <Badge n={overdue} /> : null}
+            </Link>
+          );
+        })}
+      </nav>
     </>
+  );
+}
+
+function Badge({ n }: { n: number }) {
+  return (
+    <span
+      aria-label={`${n} terlambat`}
+      className="ml-auto min-w-[22px] h-[22px] px-1.5 rounded-full bg-red-700 text-white text-xs font-bold flex items-center justify-center"
+    >
+      {n}
+    </span>
   );
 }

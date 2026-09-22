@@ -22,14 +22,16 @@ const FU_FILTERS: [string, string][] = [
 const SELECT =
   'h-11 rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus:border-aeac-amber-500 focus:outline-none';
 
-export default function ProspekList({ rows, meta }: { rows: ProspectRow[]; meta: B2BMeta }) {
+export default function ProspekList({
+  rows, meta, initialFu = '',
+}: { rows: ProspectRow[]; meta: B2BMeta; initialFu?: string }) {
   const today = jakartaToday();
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
   const [area, setArea] = useState('');
   const [cat, setCat] = useState('');
   const [staff, setStaff] = useState('');
-  const [fu, setFu] = useState('');
+  const [fu, setFu] = useState(initialFu);
 
   const enriched = useMemo(
     () => rows.map((r) => ({ ...r, fuKind: followupKind(r.next_followup_date, r.status, today) })),
@@ -44,7 +46,8 @@ export default function ProspekList({ rows, meta }: { rows: ProspectRow[]; meta:
       if (cat && r.category !== cat) return false;
       if (staff && !r.staff_ids.includes(staff)) return false;
       if (fu === 'soon' && !(r.fuKind === 'soon' || r.fuKind === 'today')) return false;
-      if (fu && fu !== 'soon' && r.fuKind !== fu) return false;
+      if (fu === 'none' && (r.fuKind !== 'none' || r.status === 'won' || r.status === 'lost')) return false;
+      if (fu && fu !== 'soon' && fu !== 'none' && r.fuKind !== fu) return false;
       if (!needle) return true;
       return [r.business_name, r.pic_name, r.area_name, r.pic_phone]
         .some((v) => (v ?? '').toLowerCase().includes(needle));
