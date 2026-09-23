@@ -1,0 +1,116 @@
+diff --git a/app/b2b/b2b-nav.tsx b/app/b2b/b2b-nav.tsx
+index cdd9aba..2bec50f 100644
+--- a/app/b2b/b2b-nav.tsx
++++ b/app/b2b/b2b-nav.tsx
+@@ -8,6 +8,7 @@ import { B2B_VERSION } from '@/lib/b2b';
+ const ITEMS = [
+   { href: '/b2b/prospek', label: 'Prospek', ready: true },
+   { href: '/b2b/follow-up', label: 'Follow-up', ready: true },
++  { href: '/b2b/penawaran', label: 'Penawaran', ready: true },
+   { href: '/b2b/ringkasan', label: 'Ringkasan', ready: true },
+ ];
+ 
+diff --git a/app/b2b/prospek/[id]/page.tsx b/app/b2b/prospek/[id]/page.tsx
+index b57b51d..4572154 100644
+--- a/app/b2b/prospek/[id]/page.tsx
++++ b/app/b2b/prospek/[id]/page.tsx
+@@ -3,6 +3,7 @@ import Link from 'next/link';
+ import { notFound } from 'next/navigation';
+ import { createClient } from '@/lib/supabase/server';
+ import type { B2BMeta, ProspectDetail } from '@/lib/b2b';
++import type { ProposalRow } from '@/lib/b2b-penawaran';
+ import ProspekDetailView from './prospek-detail';
+ 
+ export const dynamic = 'force-dynamic';
+@@ -12,9 +13,10 @@ export default async function ProspekDetailPage({ params }: { params: Promise<{
+   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
+ 
+   const supabase = await createClient();
+-  const [detail, meta] = await Promise.all([
++  const [detail, meta, proposals] = await Promise.all([
+     supabase.rpc('b2b_get_prospect', { p_id: id }),
+     supabase.rpc('b2b_get_meta'),
++    supabase.rpc('b2b_list_proposals', { p_prospect_id: id }),
+   ]);
+ 
+   if (detail.error || meta.error) {
+@@ -40,5 +42,8 @@ export default async function ProspekDetailPage({ params }: { params: Promise<{
+     );
+   }
+ 
+-  return <ProspekDetailView detail={d} meta={meta.data as B2BMeta} />;
++  return (
++    <ProspekDetailView detail={d} meta={meta.data as B2BMeta}
++      proposals={(proposals.data ?? []) as ProposalRow[]} />
++  );
+ }
+diff --git a/app/b2b/prospek/[id]/prospek-detail.tsx b/app/b2b/prospek/[id]/prospek-detail.tsx
+index 626f2e5..e484d32 100644
+--- a/app/b2b/prospek/[id]/prospek-detail.tsx
++++ b/app/b2b/prospek/[id]/prospek-detail.tsx
+@@ -9,11 +9,15 @@ import {
+   daysBetween, fmtDate, fmtDateTime, followupKind, jakartaToday, staffNames, waLink,
+   type Activity, type B2BMeta, type ProspectDetail,
+ } from '@/lib/b2b';
++import { TEMPLATE_LABEL, rupiah, type ProposalRow } from '@/lib/b2b-penawaran';
+ import ProspekForm from '../../_components/prospek-form';
++import ProposalStatus from '../../penawaran/_components/proposal-status';
+ import ActivityLogger from '../../_components/activity-logger';
+ import { StatusChip } from '../prospek-list';
+ 
+-export default function ProspekDetailView({ detail, meta }: { detail: ProspectDetail; meta: B2BMeta }) {
++export default function ProspekDetailView({
++  detail, meta, proposals = [],
++}: { detail: ProspectDetail; meta: B2BMeta; proposals?: ProposalRow[] }) {
+   const p = detail.prospect;
+   const [editing, setEditing] = useState(false);
+   const [logging, setLogging] = useState(false);
+@@ -108,6 +112,35 @@ export default function ProspekDetailView({ detail, meta }: { detail: ProspectDe
+               <Row k="Kebutuhan" v={p.needs} multiline />
+             </InfoCard>
+ 
++            <section className="rounded-xl border border-neutral-200 bg-white p-5 flex flex-col gap-3">
++              <div className="flex items-center justify-between gap-3">
++                <h2 className="text-[17px] font-bold">Penawaran</h2>
++                {p.status !== 'lost' ? (
++                  <Link href={`/b2b/penawaran/baru?prospek=${p.id}`}
++                    className="inline-flex items-center h-10 px-4 rounded-lg bg-aeac-amber-500 hover:bg-aeac-amber-600 text-black text-sm font-bold">
++                    Buat Penawaran
++                  </Link>
++                ) : null}
++              </div>
++              {proposals.length ? (
++                <ul className="flex flex-col divide-y divide-neutral-100">
++                  {proposals.map((x) => (
++                    <li key={x.id}>
++                      <Link href={`/b2b/penawaran/${x.id}`}
++                        className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-sm hover:bg-neutral-50 rounded-md px-1">
++                        <span className="font-semibold">{TEMPLATE_LABEL[x.template] ?? x.template}</span>
++                        <span className="text-neutral-600">{fmtDate(x.proposal_date)}</span>
++                        <span className="font-semibold tabular-nums">{x.total ? rupiah(x.total) : '—'}</span>
++                        <span className="ml-auto"><ProposalStatus status={x.status} sentAt={x.sent_at} /></span>
++                      </Link>
++                    </li>
++                  ))}
++                </ul>
++              ) : (
++                <p className="text-sm text-neutral-600">Belum ada penawaran.</p>
++              )}
++            </section>
++
+             <InfoCard title="Penanganan">
+               <Row k="Staf" v={staffNames(p.staff)} />
+               <Row k="Asal prospek" v={[
+diff --git a/lib/b2b.ts b/lib/b2b.ts
+index 0c41021..8344b43 100644
+--- a/lib/b2b.ts
++++ b/lib/b2b.ts
+@@ -3,7 +3,7 @@
+ // Data comes from the b2b_* SECURITY DEFINER RPCs (migrations aeac_b2b_01 / _02).
+ 
+ /** Shown in the sidebar so staff can see a new version is live. Bump on each release. */
+-export const B2B_VERSION = 'v1.3';
++export const B2B_VERSION = 'v1.4';
+ 
+ export type Area = { id: string; name: string; count: number };
+ export type Staff = { id: string; name: string };
