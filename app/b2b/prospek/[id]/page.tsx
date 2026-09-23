@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import type { B2BMeta, ProspectDetail } from '@/lib/b2b';
+import type { ProposalRow } from '@/lib/b2b-penawaran';
 import ProspekDetailView from './prospek-detail';
 
 export const dynamic = 'force-dynamic';
@@ -12,9 +13,10 @@ export default async function ProspekDetailPage({ params }: { params: Promise<{ 
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
 
   const supabase = await createClient();
-  const [detail, meta] = await Promise.all([
+  const [detail, meta, proposals] = await Promise.all([
     supabase.rpc('b2b_get_prospect', { p_id: id }),
     supabase.rpc('b2b_get_meta'),
+    supabase.rpc('b2b_list_proposals', { p_prospect_id: id }),
   ]);
 
   if (detail.error || meta.error) {
@@ -40,5 +42,8 @@ export default async function ProspekDetailPage({ params }: { params: Promise<{ 
     );
   }
 
-  return <ProspekDetailView detail={d} meta={meta.data as B2BMeta} />;
+  return (
+    <ProspekDetailView detail={d} meta={meta.data as B2BMeta}
+      proposals={(proposals.data ?? []) as ProposalRow[]} />
+  );
 }

@@ -3,7 +3,7 @@
 // Data comes from the b2b_* SECURITY DEFINER RPCs (migrations aeac_b2b_01 / _02).
 
 /** Shown in the sidebar so staff can see a new version is live. Bump on each release. */
-export const B2B_VERSION = 'v1.3';
+export const B2B_VERSION = 'v1.4';
 
 export type Area = { id: string; name: string; count: number };
 export type Staff = { id: string; name: string };

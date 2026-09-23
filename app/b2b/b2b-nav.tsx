@@ -8,6 +8,7 @@ import { B2B_VERSION } from '@/lib/b2b';
 const ITEMS = [
   { href: '/b2b/prospek', label: 'Prospek', ready: true },
   { href: '/b2b/follow-up', label: 'Follow-up', ready: true },
+  { href: '/b2b/penawaran', label: 'Penawaran', ready: true },
   { href: '/b2b/ringkasan', label: 'Ringkasan', ready: true },
 ];
 

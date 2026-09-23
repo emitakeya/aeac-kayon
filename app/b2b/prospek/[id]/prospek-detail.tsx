@@ -9,11 +9,15 @@ import {
   daysBetween, fmtDate, fmtDateTime, followupKind, jakartaToday, staffNames, waLink,
   type Activity, type B2BMeta, type ProspectDetail,
 } from '@/lib/b2b';
+import { TEMPLATE_LABEL, rupiah, type ProposalRow } from '@/lib/b2b-penawaran';
 import ProspekForm from '../../_components/prospek-form';
+import ProposalStatus from '../../penawaran/_components/proposal-status';
 import ActivityLogger from '../../_components/activity-logger';
 import { StatusChip } from '../prospek-list';
 
-export default function ProspekDetailView({ detail, meta }: { detail: ProspectDetail; meta: B2BMeta }) {
+export default function ProspekDetailView({
+  detail, meta, proposals = [],
+}: { detail: ProspectDetail; meta: B2BMeta; proposals?: ProposalRow[] }) {
   const p = detail.prospect;
   const [editing, setEditing] = useState(false);
   const [logging, setLogging] = useState(false);
@@ -107,6 +111,35 @@ export default function ProspekDetailView({ detail, meta }: { detail: ProspectDe
               <Row k="Harga vendor" v={p.vendor_price_notes} />
               <Row k="Kebutuhan" v={p.needs} multiline />
             </InfoCard>
+
+            <section className="rounded-xl border border-neutral-200 bg-white p-5 flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-[17px] font-bold">Penawaran</h2>
+                {p.status !== 'lost' ? (
+                  <Link href={`/b2b/penawaran/baru?prospek=${p.id}`}
+                    className="inline-flex items-center h-10 px-4 rounded-lg bg-aeac-amber-500 hover:bg-aeac-amber-600 text-black text-sm font-bold">
+                    Buat Penawaran
+                  </Link>
+                ) : null}
+              </div>
+              {proposals.length ? (
+                <ul className="flex flex-col divide-y divide-neutral-100">
+                  {proposals.map((x) => (
+                    <li key={x.id}>
+                      <Link href={`/b2b/penawaran/${x.id}`}
+                        className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-sm hover:bg-neutral-50 rounded-md px-1">
+                        <span className="font-semibold">{TEMPLATE_LABEL[x.template] ?? x.template}</span>
+                        <span className="text-neutral-600">{fmtDate(x.proposal_date)}</span>
+                        <span className="font-semibold tabular-nums">{x.total ? rupiah(x.total) : '—'}</span>
+                        <span className="ml-auto"><ProposalStatus status={x.status} sentAt={x.sent_at} /></span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-neutral-600">Belum ada penawaran.</p>
+              )}
+            </section>
 
             <InfoCard title="Penanganan">
               <Row k="Staf" v={staffNames(p.staff)} />
