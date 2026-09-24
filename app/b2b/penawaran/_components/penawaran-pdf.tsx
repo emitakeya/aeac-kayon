@@ -11,7 +11,7 @@ import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer';
 import type { Style } from '@react-pdf/types';
 import { registerPdfFonts } from '@/app/riwayat-customer/pdf-fonts';
 import {
-  boldRuns, itemsTotal, lineTotal, listLines, longDate, paragraphs, rupiah, unitCount,
+  boldRuns, itemsTotal, lineTotal, listLines, longDate, paragraphs, rupiah, tableColumns, unitCount,
   type ProposalDraft,
 } from '@/lib/b2b-penawaran';
 
@@ -40,7 +40,7 @@ const s = StyleSheet.create({
   tTotal: { flexDirection: 'row', alignItems: 'center', backgroundColor: TINT, paddingVertical: 7 },
   th: { fontWeight: 600, fontSize: 9.5, paddingHorizontal: 5 },
   td: { fontSize: 9.5, paddingHorizontal: 5 },
-  cLabel: { width: '31%' },
+  cLabel: { flexGrow: 1, flexShrink: 1, flexBasis: 0 },
   cQty: { width: '11%', textAlign: 'center' },
   cNormal: { width: '20%', textAlign: 'right' },
   cPrice: { width: '19%', textAlign: 'right' },
@@ -99,26 +99,27 @@ export function PenawaranPDF({
           {draft.blocks.filter((bl) => bl.visible).map((bl) => {
             if (bl.kind === 'table') {
               if (!draft.items.length) return null;
+              const col = tableColumns(bl);
               return (
                 <View key={bl.id} style={s.gap} wrap={false}>
                   <View style={s.tHead}>
                     <Text style={[s.th, s.cLabel]}>Jenis Unit</Text>
                     <Text style={[s.th, s.cQty]}>Jumlah</Text>
-                    <Text style={[s.th, s.cNormal]}>Harga Normal</Text>
-                    <Text style={[s.th, s.cPrice]}>Harga Korporat</Text>
+                    {col.normal ? <Text style={[s.th, s.cNormal]}>Harga Normal</Text> : null}
+                    {col.price ? <Text style={[s.th, s.cPrice]}>{col.priceLabel}</Text> : null}
                     <Text style={[s.th, s.cSub]}>Subtotal</Text>
                   </View>
                   {draft.items.map((it, i) => (
                     <View key={i} style={s.tRow}>
                       <Text style={[s.td, s.cLabel]}>{it.label || '—'}</Text>
                       <Text style={[s.td, s.cQty]}>{String(it.qty)}</Text>
-                      <Text style={[s.td, s.cNormal]}>{it.normal_price}</Text>
-                      <Text style={[s.td, s.cPrice, s.bold]}>{rupiah(it.price)}</Text>
+                      {col.normal ? <Text style={[s.td, s.cNormal]}>{it.normal_price}</Text> : null}
+                      {col.price ? <Text style={[s.td, s.cPrice, s.bold]}>{rupiah(it.price)}</Text> : null}
                       <Text style={[s.td, s.cSub, s.bold]}>{rupiah(lineTotal(it))}</Text>
                     </View>
                   ))}
                   <View style={s.tTotal}>
-                    <Text style={[s.td, s.bold, { width: '81%' }]}>
+                    <Text style={[s.td, s.bold, s.cLabel]}>
                       {`Total per kunjungan${units ? ` (${units} unit)` : ''}`}
                     </Text>
                     <Text style={[s.td, s.cSub, s.bold, { fontSize: 11.5 }]}>{rupiah(total)}</Text>

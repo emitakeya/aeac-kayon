@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { fmtDateTime, type B2BMeta } from '@/lib/b2b';
 import {
-  TEMPLATE_INFO, TEMPLATE_LABEL, itemsTotal, lineTotal, newBlockId, parseRupiah, pdfFilename, rupiah,
+  TEMPLATE_INFO, TEMPLATE_LABEL, itemsTotal, tableColumns, lineTotal, newBlockId, parseRupiah, pdfFilename, rupiah,
   templateBlocks, unfilledPlaceholders, unitCount,
   type Block, type Item, type ProposalDraft, type TemplateKey,
 } from '@/lib/b2b-penawaran';
@@ -267,10 +267,26 @@ export default function PenawaranEditor({
                 </div>
 
                 {bl.kind === 'table' ? (
+                  <>
+                  <div className="flex flex-wrap gap-x-5 gap-y-2 rounded-lg bg-neutral-50 px-3 py-2.5 text-[13px]">
+                    <span className="font-semibold text-neutral-700">Kolom di PDF:</span>
+                    <label className="flex items-center gap-1.5">
+                      <input type="checkbox" checked={tableColumns(bl).normal}
+                        onChange={(e) => setBlock(i, { show_normal: e.target.checked })} className="w-4 h-4 accent-amber-500" />
+                      Harga Normal
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <input type="checkbox" checked={tableColumns(bl).price}
+                        onChange={(e) => setBlock(i, { show_price: e.target.checked })} className="w-4 h-4 accent-amber-500" />
+                      {tableColumns(bl).normal ? 'Harga Korporat' : 'Harga per Unit'}
+                    </label>
+                    <span className="text-neutral-500">Jumlah, subtotal dan total selalu tampil.</span>
+                  </div>
                   <ItemsEditor items={d.items} setItem={setItem}
                     add={() => patch({ items: [...d.items, { label: '', qty: 1, normal_price: '', price: 0 }] })}
                     remove={(j) => patch({ items: d.items.filter((_, k) => k !== j) })}
                     total={total} units={units} />
+                  </>
                 ) : (
                   <>
                     <label htmlFor={`bx-${bl.id}`} className="sr-only">{bl.title}</label>

@@ -22,6 +22,10 @@ export type Block = {
   title: string;
   text: string;
   visible: boolean;
+  /** Table blocks only: print the "Harga Normal" column (default true). */
+  show_normal?: boolean;
+  /** Table blocks only: print the per-unit price column (default true). */
+  show_price?: boolean;
 };
 
 export type Item = {
@@ -246,6 +250,18 @@ export function unfilledPlaceholders(d: Pick<ProposalDraft, 'blocks'>): string[]
     for (const m of bl.text.matchAll(/\[[^\]\n]{1,60}\]/g)) found.add(m[0]);
   }
   return [...found];
+}
+
+/** Which price columns a table block prints; old proposals default to both. */
+export function tableColumns(bl: Pick<Block, 'show_normal' | 'show_price'>) {
+  const price = bl.show_price !== false;
+  const normal = bl.show_normal !== false;
+  return {
+    normal,
+    price,
+    /** Without the normal price there is nothing to compare against. */
+    priceLabel: normal ? 'Harga Korporat' : 'Harga per Unit',
+  };
 }
 
 export function hasVisibleTable(d: Pick<ProposalDraft, 'blocks'>): boolean {

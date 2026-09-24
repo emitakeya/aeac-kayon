@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  boldRuns, itemsTotal, lineTotal, listLines, longDate, paragraphs, rupiah, unitCount,
+  boldRuns, itemsTotal, lineTotal, listLines, longDate, paragraphs, rupiah, tableColumns, unitCount,
   type ProposalDraft,
 } from '@/lib/b2b-penawaran';
 
@@ -77,14 +77,16 @@ export default function PenawaranPreview({
           {draft.blocks.filter((bl) => bl.visible).map((bl) => {
             if (bl.kind === 'table') {
               if (!draft.items.length) return null;
+              const col = tableColumns(bl);
+              const span = 2 + (col.normal ? 1 : 0) + (col.price ? 1 : 0);
               return (
                 <table key={bl.id} style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ borderBottom: `1px solid ${INK}` }}>
                       <th style={{ textAlign: 'left', padding: '7px 8px', fontWeight: 600 }}>Jenis Unit</th>
                       <th style={{ textAlign: 'center', padding: '7px 8px', fontWeight: 600 }}>Jumlah</th>
-                      <th style={{ textAlign: 'right', padding: '7px 8px', fontWeight: 600 }}>Harga Normal</th>
-                      <th style={{ textAlign: 'right', padding: '7px 8px', fontWeight: 600 }}>Harga Korporat</th>
+                      {col.normal ? <th style={{ textAlign: 'right', padding: '7px 8px', fontWeight: 600 }}>Harga Normal</th> : null}
+                      {col.price ? <th style={{ textAlign: 'right', padding: '7px 8px', fontWeight: 600 }}>{col.priceLabel}</th> : null}
                       <th style={{ textAlign: 'right', padding: '7px 8px', fontWeight: 600 }}>Subtotal</th>
                     </tr>
                   </thead>
@@ -93,13 +95,13 @@ export default function PenawaranPreview({
                       <tr key={i} style={{ borderBottom: `1px solid ${MUSTARD}` }}>
                         <td style={{ padding: '7px 8px' }}>{it.label || '—'}</td>
                         <td style={{ padding: '7px 8px', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{it.qty}</td>
-                        <td style={{ padding: '7px 8px', textAlign: 'right' }}>{it.normal_price}</td>
-                        <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{rupiah(it.price)}</td>
+                        {col.normal ? <td style={{ padding: '7px 8px', textAlign: 'right' }}>{it.normal_price}</td> : null}
+                        {col.price ? <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{rupiah(it.price)}</td> : null}
                         <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{rupiah(lineTotal(it))}</td>
                       </tr>
                     ))}
                     <tr style={{ background: TINT }}>
-                      <td colSpan={4} style={{ padding: '10px 8px', fontWeight: 700 }}>
+                      <td colSpan={span} style={{ padding: '10px 8px', fontWeight: 700 }}>
                         Total per kunjungan{units ? ` (${units} unit)` : ''}
                       </td>
                       <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 700, fontSize: 16, fontVariantNumeric: 'tabular-nums' }}>
